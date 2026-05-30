@@ -102,7 +102,26 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
     \label{tab:scenes}
 \end{table}
 
-\paragraph{Channels and spectral modes.} The pixel feature stack at each location is thirteen-dimensional: twelve Sentinel-2 surface reflectance bands plus one Sentinel-5P aerosol channel. Image bands are scaled by a factor of $10{,}000$, and the aerosol channel is divided by its per-dataset maximum ($\approx 7.13$) so that all channels lie within a comparable normalized range. The pipeline supports twelve preset \emph{spectral modes} that select subsets of the 13 channels (all bands, RGB only, SWIR only, NDVI/NBR composites, with or without aerosol, etc.); these are exposed as the \texttt{mode} key in every configuration file. Unless otherwise stated, all experiments in this paper use \emph{mode 5} (SWIR + aerosol, 4 input channels), which the original Sen2Fire paper~\cite{sen2fire} identified as the strongest classical configuration. We also report mode-4 (SWIR-only, 3 input channels) results in Section~\ref{sec:fpn-extended} as a direct response to the train/test domain shift documented in Section~\ref{sec:domainshift}.
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/scene1_rgb.jpg}
+        \caption{Scene 1 (training).}
+        \label{fig:scene1-rgb}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/scene4_rgb.jpg}
+        \caption{Scene 4 (test).}
+        \label{fig:scene4-rgb}
+    \end{subfigure}
+    \caption{True-colour RGB composites (Sentinel-2 bands B4/B3/B2) of a training scene (left) and the held-out test scene (right), each reconstructed from its overlapping $512\times512$ patches. The two scenes are geographically and temporally distinct, which is the source of the train/test domain shift quantified in Section~\ref{sec:domainshift}.}
+    \label{fig:scene-rgb}
+\end{figure}
+
+\paragraph{Channels and spectral modes.} The pixel feature stack at each location is thirteen-dimensional: twelve Sentinel-2 surface reflectance bands plus one Sentinel-5P aerosol channel. Image bands are scaled by a factor of $10{,}000$, and the aerosol channel is divided by its per-dataset maximum ($\approx 7.13$) so that all channels lie within a comparable normalized range. The pipeline supports twelve preset \emph{spectral modes} that select subsets of the 13 channels (all bands, RGB only, SWIR only, NDVI/NBR composites, with or without aerosol, etc.); these are exposed as the \texttt{mode} key in every configuration file. Unless otherwise stated, all experiments in this paper use \emph{mode 5} (SWIR + aerosol, 4 input channels), which the original Sen2Fire paper~\cite{sen2fire} identified as the strongest classical configuration. We also report mode-4 (SWIR-only, 3 input channels) results in Section~\ref{sec:fpn-extended} as a direct response to the train/test domain shift documented in Section~\ref{sec:domainshift}. Several modes are built from \emph{spectral indices} rather than raw bands: the Normalized Burn Ratio, $\mathrm{NBR} = (\mathrm{NIR}-\mathrm{SWIR})/(\mathrm{NIR}+\mathrm{SWIR})$, measures burn severity (values near or below zero flag burned or stressed vegetation), while the Normalized Difference Vegetation Index, $\mathrm{NDVI} = (\mathrm{NIR}-\mathrm{Red})/(\mathrm{NIR}+\mathrm{Red})$, measures vegetation density, so a sharp NDVI drop can indicate recently burnt areas~\cite{sen2fire}.
 
 \paragraph{Class imbalance.} Fire pixels are extremely rare. Across all 2{,}466 patches the average fire-pixel fraction is $\approx 4.6\%$ with high variance: most patches contain no fire pixels at all, and a long tail contains patches with 20--100\% fire coverage. The training split has a per-patch fire mean near 2.5\%; the test scene has $\approx 5.7\%$ (Figure~\ref{fig:class-balance}). This imbalance is the central modeling challenge: a trivial all-non-fire predictor achieves $\approx 94$\% overall accuracy and 0\% Fire $F_1$. We therefore report Fire $F_1$ and Fire IoU as the primary metrics, with overall accuracy included only for compatibility with prior work.
 
@@ -257,7 +276,7 @@ The cross-architecture comparison complicates any simple ``more qubits is better
 \subsection{Loss Function Ablation}
 \label{sec:lossablation}
 
-The high class imbalance raised the natural question of whether the loss function was the limiting factor for classical performance. We evaluated four loss configurations against the classical U-Net (mode 5, base channels 48, 10 epochs, all other hyperparameters held fixed), summarized in Table~\ref{tab:loss-ablation}. Weighted cross-entropy and a Dice/CE fusion perform within noise of each other and outperform every focal-loss variant we tested. Increasing the fire-class weight in focal loss from 10 to 20 made performance slightly worse, suggesting that the existing weighting plus the focal modulation was over-correcting. We concluded that loss-function choice is not the bottleneck on this dataset, and used weighted cross-entropy (\texttt{fire\_class\_weight = 10}) for all subsequent classical and quantum runs.
+The high class imbalance raised the natural question of whether the loss function was the limiting factor for classical performance. We evaluated four loss configurations against the classical U-Net (mode 5, base channels 64, 10 epochs, all other hyperparameters held fixed), summarized in Table~\ref{tab:loss-ablation}. Weighted cross-entropy and a Dice/CE fusion perform within noise of each other and outperform every focal-loss variant we tested. Increasing the fire-class weight in focal loss from 10 to 20 made performance slightly worse, suggesting that the existing weighting plus the focal modulation was over-correcting. We concluded that loss-function choice is not the bottleneck on this dataset, and used weighted cross-entropy (\texttt{fire\_class\_weight = 10}) for all subsequent classical and quantum runs.
 
 \begin{table}[ht]
     \centering
