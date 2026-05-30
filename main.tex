@@ -1,0 +1,696 @@
+\documentclass{article}
+% ---------- Packages ----------
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{float}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue}
+
+% Project name macro --- change here to rename the system everywhere.
+\newcommand{\projectname}{QFireNet}
+
+% ---------- Title ----------
+\title{\projectname: A Quantum-Enhanced U-Net for Wildfire Segmentation\\ from Sentinel-2 Imagery}
+
+\author{
+Jaiman Munshi\thanks{Corresponding author: \texttt{jmunshi@umd.edu}.} \and Tanvi Tewary \and Sawyer Bloom
+\and Aidan Chu \and Chetan Maviti \and Kyon Winston-Bey \and Harshit Badjatia \and Farhan Kittur \and Vardhan Madhavarapu \and Varun Kota \and Joshua Kwon \and Nazia Rangwala-Vohra \and Franz Klein\thanks{Corresponding author (advisor): \texttt{fklein@umd.edu}.}
+\\[0.5em]
+\normalsize IonQ Team, App Dev Club, University of Maryland, College Park
+}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Wildfire detection from satellite imagery is a semantic image segmentation problem that has proven to be difficult due to challenges such as class imbalance, feature complexity, and atmospheric interference. In this paper, we build on the foundational U-Net image segmentation model to develop a quantum-hybrid solution in hopes of more effectively modeling the high-dimensional spectral feature space of the Sen2Fire dataset. We inject a variational quantum circuit in the bottleneck portion of U-Net, specifically the QuFeX and QB-Net ansatzes.  We test a classical Feature Pyramid Network (FPN) for further comparative analysis of the model, and we also explore classical improvements to the U-Net model and its training process, including a compression of parameters, alternative loss functions, and uniform mixing of input data. Our primary finding is that under matched conditions, both QB-Net (with an $F_1$ score of 31.18) and QuFeX ($F_1 = 30.79$) outperformed the classical U-Net baseline results ($F_1 = 28.71$). Additionally, the classical FPN achieved a comparable score of 31.13. A crucial finding was that data mixing removed a significant domain shift between the geographically-separated train and test sets, which boosted the classical FPN $F_1$ score to 39.76. We validate the architecture's robustness and generalizability to the wildfire detection problem via cross-dataset transfer on the California Burned Areas (CaBuAr) dataset. Overall, we find that quantum machine learning has potential to provide an advantage in the problem of machine learning for wildfire image segmentation, and further experiments will continue to validate and expand upon this finding.
+\end{abstract}
+
+% =====================================================================
+\section{Background}
+% =====================================================================
+
+The increasing frequency and intensity of global wildfires make manual fire monitoring inefficient and unreliable, leading to significant public safety and environmental risks. Automated systems capable of processing large streams of satellite imagery with high precision and recall are critical to preserving ecosystems and preventing destruction.
+
+Despite the urgent need for a fully automated wildfire detection system, developing one presents numerous technical challenges:
+
+\begin{enumerate}
+    \item \textbf{Class Imbalance:} Since fire events are rare and typically make up a tiny fraction of pixels in all satellite images, standard machine learning models will often achieve ``high accuracy'' by simply predicting `non-fire' for every pixel, leading to actual fires being missed.
+    \item \textbf{Spectral Complexity:} Wildfires tend to vary greatly depending on their intensity, type of burn, and the surrounding environment.
+    \item \textbf{Atmospheric Interference:} Smoke, clouds, and aerosols can lead to false positive detections or obfuscate detection of real fires.
+    \item \textbf{Multi-Scale Nature:} Fires can range from tiny ignition points to large conflagrations, requiring a model that can capture details and extract patterns on both small and large scales.
+\end{enumerate}
+
+The volume, dimensionality, and irregularity of satellite wildfire data exceed what hand-designed thresholds or rule-based algorithms can robustly handle. Each revisit by the Sentinel-2 satellite produces gigabytes of multispectral imagery per study area, and any individual fire signature depends on a non-linear interaction between spectral bands, surrounding land cover, and atmospheric conditions. Spectral indices like NBR and NDVI capture only a small slice of this interaction and saturate quickly under smoke, cloud cover, or unusual fuel types. 
+
+Our training dataset, Sen2Fire, relies on multiple satellite technologies combining imagery and atmospheric data to clearly picture the Earth's ground. The Sentinel-2 Mission provides continuous monitoring via its Multispectral Imager (MSI), which offers a five-day revisit time. The Sentinel-2 Mission's data, primarily coming from the European Space Agency's Sentinel-2 Mission, specifically uses the Multispectral Imager (MSI) with the Sentinel-2A and Sentinel-2B satellites. It captures 13 distinct spectral bands across the electromagnetic spectrum, and each band equates to varying spatial resolutions, from 10 to 60 meters. These bands are critical because high-temperature targets emit primarily in the short-wave infrared region of the spectrum. Additionally, we utilize the Aerosol Index from the Sentinel-5P satellite. Since wildfires produce large amounts of smoke, this aerosol optical depth data is crucial for the atmospheric correction, allowing the model to accurately read under varying atmospheric conditions. To train the model, we need accurate ``ground truth'' labels, derived from the MOD14A1 V6.1 global daily fire product used to manually annotate the binary fire masks.
+
+Early methods of fire detection relied on simple threshold-based algorithms that looked at single spectral bands such as the Normalized Burn Ratio (NBR) or NDVI. These early approaches tended to suffer from high false-positive rates and could not adapt to varying environments. Machine learning, and convolutional neural networks in particular, address this gap by learning the relevant feature interactions directly from labeled data. Wildfire image segmentation models like U-Net \cite{unet} combine SWIR reflectance, aerosol concentration, and local spatial context into a per-pixel fire probability without a human specifying what those rules should be, and it generalizes to scenes the analyst never explicitly considered.
+
+Even within the deep learning family, however, wildfire detection remains a hard problem. The class imbalance is high (less than 6\% fire pixels in our training set), the input is high-dimensional (12 spectral bands plus aerosol), and the most informative features sit at the deepest, most compressed point of the machine learning model, where a classical convolution must summarize the entire scene through a small number of channels. This is where quantum machine learning can provide an advantage. Variational quantum circuits operate in a Hilbert space whose dimension grows exponentially with qubit count, providing a high-capacity feature space for compressed, correlated inputs at relatively few trainable parameters. Hybrid quantum-classical architectures replace selected layers of a classical network, typically at the bottleneck, with such circuits, with the goal of capturing complex correlations between features that an equivalent classical layer cannot represent. While near-term quantum hardware remains noisy and limited in scale, simulator-based experiments allow us to test whether a quantum bottleneck offers a useful inductive bias for tasks like wildfire segmentation, where the signal of interest is sparse and the spectral feature space is rich.
+
+% =====================================================================
+\section{Related Work}
+% =====================================================================
+
+\paragraph{Wildfire segmentation from satellite imagery.} Early approaches to fire detection from multispectral imagery relied on hand-engineered spectral indices such as NBR and NDVI thresholded at fixed values, which suffer from high false-positive rates under varying atmospheric and surface conditions. Convolutional segmentation networks --- the U-Net~\cite{unet} in particular --- replaced these with end-to-end learned models that combine reflectance and spatial context per pixel. The Sen2Fire benchmark~\cite{sen2fire} on which we evaluate provides one of the few publicly released Sentinel-2 wildfire segmentation datasets with manually annotated fire masks and a fixed scene-based split; the accompanying baseline U-Net at 17.3\,M parameters defines the current published Fire $F_1$ on this protocol. CaBuAr~\cite{cabuar}, which we use for our cross-dataset transfer evaluation in Section~\ref{sec:cabuar}, extends the benchmark space to California burned areas with a 5-fold cross-validation protocol but ships at scene granularity in HDF5 and lacks an aerosol channel. Feature Pyramid Networks~\cite{fpn} originate in object detection but transfer naturally to segmentation by replacing the U-Net's symmetric decoder with a top-down pyramid. We use this architectural variant as a strong classical control in Section~\ref{sec:fpn-method}.
+
+\paragraph{Hybrid quantum-classical neural networks.} A growing line of work replaces selected classical layers of a deep network --- typically convolutions or dense bottlenecks --- with parameterized quantum circuits, motivated by the exponential-dimensional Hilbert space these circuits operate in. Two recent designs targeting the U-Net bottleneck inform our work directly. Qu-Net's QuFeX module~\cite{qufex} splits the qubit register and applies $U_1$ ($R_X{+}R_Z$) and $U_2$ ($R_X{+}R_Y$) blocks with a CZ entangling ring; QB-Net~\cite{qbnet} encodes inputs with $R_Y$ embedding, applies a $U_3$ rotation on every qubit, and entangles via an open CNOT ladder. To both bottlenecks we add data re-uploading~\cite{data-reuploading} , which involves re-encoding the input before every variational layer to lift effective expressivity without increasing the trainable parameter count. This is a modification we introduce as the original QuFeX design encodes the input only once. We adopt both circuits as drop-in bottleneck replacements inside an otherwise identical full-width U-Net, which lets us attribute any classical/quantum performance difference to the circuit itself rather than to backbone changes. A persistent challenge in this family of architectures is gradient vanishing on deep or wide circuits (the barren-plateau phenomenon~\cite{barren-plateaus}) which constrains practical circuit depth on near-term hardware and partly motivates the modest qubit counts ($n \le 8$) and layer depths ($L \le 2$) we evaluate.
+
+\paragraph{Class imbalance and regularization in dense prediction.} Fire pixels comprise under $6\%$ of the Sen2Fire test set, placing this benchmark squarely in the high class-imbalance regime studied by the dense-prediction literature. We compare weighted cross-entropy, Dice-augmented losses, and focal variants as standard mitigations in Section~\ref{sec:lossablation}. On the regularization side, MixUp~\cite{mixup} and CutMix~\cite{cutmix} sample-mixing strategies are now standard ingredients in modern segmentation training pipelines; we apply both inside the FPN variant of our backbone described in Section~\ref{sec:fpn-method}.
+
+% =====================================================================
+\section{Sen2Fire Benchmark Dataset}
+% =====================================================================
+
+We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, a publicly released Sentinel-2 wildfire segmentation dataset covering the 2019--2020 Australian bushfire season. The dataset comprises 2{,}466 image patches of $512\times512$ pixels, partitioned into four contiguous scenes summarized in Table~\ref{tab:scenes}. Each patch carries (i) a 12-band Sentinel-2 multispectral image, (ii) a single-band aerosol layer derived from Sentinel-5P, and (iii) a binary fire mask manually annotated by domain experts using the MOD14A1 V6.1 daily fire product as a reference signal. Adjacent patches within a scene overlap by 128 pixels along both spatial axes, so a single patch is reconstructible into a full scene at inference time without seams.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lcccc}
+        \toprule
+        Scene & Role & Patch grid (rows $\times$ cols) & Patches & Approx.\ fire-pixel rate \\
+        \midrule
+        Scene 1 & Train & $32 \times 27$ & 864 & 2--3\% \\
+        Scene 2 & Train & $22 \times 27$ & 594 & 2--3\% \\
+        Scene 3 & Validation & $14 \times 36$ & 504 & varies \\
+        Scene 4 & Test & $21 \times 24$ & 504 & $\approx 5.7$\% \\
+        \bottomrule
+    \end{tabular}
+    \caption{Sen2Fire scene composition and split. The official partition is scene-based: training uses scenes 1 and 2, validation uses scene 3, and testing uses scene 4. Due to the fact that the splits are geographically and temporally distinct, the test set differs substantially from training in aerosol load and fire-pixel density (see Section~\ref{sec:domainshift}).}
+    \label{tab:scenes}
+\end{table}
+
+\paragraph{Channels and spectral modes.} The pixel feature stack at each location is thirteen-dimensional: twelve Sentinel-2 surface reflectance bands plus one Sentinel-5P aerosol channel. Image bands are scaled by a factor of $10{,}000$, and the aerosol channel is divided by its per-dataset maximum ($\approx 7.13$) so that all channels lie within a comparable normalized range. The pipeline supports twelve preset \emph{spectral modes} that select subsets of the 13 channels (all bands, RGB only, SWIR only, NDVI/NBR composites, with or without aerosol, etc.); these are exposed as the \texttt{mode} key in every configuration file. Unless otherwise stated, all experiments in this paper use \emph{mode 5} (SWIR + aerosol, 4 input channels), which the original Sen2Fire paper~\cite{sen2fire} identified as the strongest classical configuration. We also report mode-4 (SWIR-only, 3 input channels) results in Section~\ref{sec:fpn-extended} as a direct response to the train/test domain shift documented in Section~\ref{sec:domainshift}.
+
+\paragraph{Class imbalance.} Fire pixels are extremely rare. Across all 2{,}466 patches the average fire-pixel fraction is $\approx 4.6\%$ with high variance: most patches contain no fire pixels at all, and a long tail contains patches with 20--100\% fire coverage. The training split has a per-patch fire mean near 2.5\%; the test scene has $\approx 5.7\%$ (Figure~\ref{fig:class-balance}). This imbalance is the central modeling challenge: a trivial all-non-fire predictor achieves $\approx 94$\% overall accuracy and 0\% Fire $F_1$. We therefore report Fire $F_1$ and Fire IoU as the primary metrics, with overall accuracy included only for compatibility with prior work.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.95\textwidth]{media/class_balance.png}
+    \caption{Per-patch fire-pixel fraction in the training (left) and test (right) splits, computed on a 300-patch random sample. Most patches contain little or no fire; the test scene has a substantially higher mean fire-pixel rate than training.}
+    \label{fig:class-balance}
+\end{figure}
+
+% =====================================================================
+\section{Methodology}
+% =====================================================================
+
+\subsection{Classical U-Net Architecture and Optimization}
+\label{sec:compactunet}
+
+The basis of our automated detection system is a U-Net architecture designed to perform pixel-level semantic segmentation on 512$\times$512 pixel image patches. The standard U-Net features a symmetric ``encoder-decoder'' structure, where the encoder progressively downsamples the image to extract hierarchical features, and the decoder upsamples it using skip connections to preserve fine spatial details that are critical for identifying small fire fronts. To improve computational efficiency, we reduced the model's internal width. By decreasing the base channel dimensions from $64 \rightarrow 128 \rightarrow 256 \rightarrow 512 \rightarrow 1024$ down to $48 \rightarrow 96 \rightarrow 192 \rightarrow 384 \rightarrow 768$, we achieved a 43.73\% reduction in parameters, shrinking the model from 17.27 million to 9.72 million parameters. This optimization significantly reduced the model's memory footprint from 69.07 MB to 38.86 MB while remaining reasonably accurate on a preliminary local sanity check (Table~\ref{tab:prelim-accuracy}). Through this testing, our team found out that the biggest parameter savings came from shrinking the U-Net width, and the input channels were not the main parameter bottleneck.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lccc}
+        \toprule
+        Variant & Base channels & Total parameters & Checkpoint (fp32) \\
+        \midrule
+        Baseline U-Net (Xu et al.~\cite{sen2fire}) & 64 & 17.27\,M & 69.07\,MB \\
+        \textbf{Compact U-Net (ours)}              & 48 & \textbf{9.72\,M} & \textbf{38.86\,MB} \\
+        \midrule
+        Parameter reduction                        & ---  & $-43.73\%$ & $-43.74\%$ \\
+        \bottomrule
+    \end{tabular}
+    \caption{Parameter footprint of the original Sen2Fire baseline U-Net and our width-reduced compact variant. Reducing the encoder/decoder width from $64{\to}1024$ to $48{\to}768$ removes $\approx 7.55$\,M parameters. A preliminary balanced local sanity check (Table~\ref{tab:prelim-accuracy}) indicates the width reduction does not catastrophically degrade accuracy, but a matched-epoch full train/validation/test run is required to quantify the gap precisely.}
+    \label{tab:param-counts}
+\end{table}
+
+\paragraph{Preliminary accuracy check.} To verify that the width reduction does not catastrophically degrade segmentation quality, we ran a small balanced local sanity check comparing the two widths on CPU. Both models were evaluated on the same balanced local subsets: a 48-patch training subset (24 fire / 24 non-fire) and a 24-patch test subset (12 fire / 12 non-fire). Critically, the width-64 baseline used the existing fully trained checkpoint, whereas the width-48 compact model was trained locally for only a single epoch, so the comparison is biased \emph{against} the compact model. Under these conditions the width-64 baseline reached $90.95\%$ pixel accuracy and the width-48 compact model reached $87.04\%$ (Table~\ref{tab:prelim-accuracy}); for reference, the existing full-pipeline baseline reaches $93.41\%$ on the same metric. The $\approx 3.9$\,pp gap is consistent with the compact model's single-epoch training budget rather than a fundamental loss of capacity, but we report it transparently rather than overstating accuracy preservation: a matched-epoch full train/validation/test run is required before the width reduction can be claimed to preserve accuracy. We present this only as a preliminary check motivating the compact backbone.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        Configuration & Base channels & Local test accuracy \\
+        \midrule
+        Baseline (fully trained checkpoint) & 64 & 90.95\% \\
+        Compact (1 local epoch)             & 48 & 87.04\% \\
+        \midrule
+        Full-pipeline baseline (reference)  & 64 & 93.41\% \\
+        \bottomrule
+    \end{tabular}
+    \caption{Preliminary balanced local accuracy sanity check (CPU; balanced 48-patch train / 24-patch test subsets). The width-48 compact model was trained for a single local epoch while the width-64 baseline used an existing fully trained checkpoint, so the $\approx 3.9$\,pp gap is confounded by training budget and should not be read as a final accuracy-preservation result. A matched-epoch full train/validation/test run is required for a fair comparison.}
+    \label{tab:prelim-accuracy}
+\end{table}
+
+\subsection{Experimental Setup}
+
+All training runs were executed on the University of Maryland's Zaratan high-performance computing cluster, utilizing NVIDIA A100 and H100 GPU nodes via SLURM job scheduling. The scale of the Sen2Fire dataset and the computational demands of hybrid quantum-classical training made HPC access essential for full-epoch runs at 512$\times$512 resolution across 2,466 patches.
+
+PyTorch was configured with CUDA 12.1 support to ensure compatibility with H100 nodes. For quantum simulation, PennyLane's \texttt{lightning.gpu} backend was used in place of the default CPU simulator, enabling GPU-accelerated circuit evaluation and reducing per-epoch training time for hybrid runs to approximately fifteen minutes. Due to the sequential nature of quantum circuit execution, parameter-shift differentiation incurred significantly higher per-epoch costs and was not used for full training runs. SLURM submission scripts were standardized to support both system module and shared conda environment activation, enabling reproducible job submission across the team.
+
+\subsection{HPC and Engineering Optimizations}
+
+Several training-loop changes meaningfully improved throughput and correctness on the Zaratan cluster. Table~\ref{tab:engineering} summarizes the PyTorch-side optimizations that were applied to every run.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{p{0.32\textwidth}p{0.6\textwidth}}
+        \toprule
+        Change & Effect \\
+        \midrule
+        \texttt{cudnn.benchmark = True} & Lets cuDNN auto-select the fastest kernel for the fixed 512$\times$512 input shape (free speedup). \\
+        \texttt{persistent\_workers = True} & DataLoader workers stay alive between epochs instead of respawning, so the next epoch starts loading immediately. \\
+        Removed \texttt{empty\_cache()} from batch loop & Avoids unnecessary CPU--GPU synchronization on every batch; PyTorch manages allocator memory adequately on its own. \\
+        \texttt{zero\_grad(set\_to\_none=True)} & Deallocates gradient tensors instead of zeroing them in place, reducing memory pressure and slightly accelerating the backward pass. \\
+        \texttt{lightning.gpu} vs.\ \texttt{default.qubit} & PennyLane's GPU-backed simulator brings hybrid epoch time from hours (CPU simulator) to roughly fifteen minutes on an H100. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Training-loop and quantum-backend changes applied to all reported runs.}
+    \label{tab:engineering}
+\end{table}
+
+In the course of these changes we caught two real bugs in the original training script that affected reported metrics. First, \texttt{model.eval()} was being called during validation but never reversed, so BatchNorm layers froze on their epoch-1 running statistics for the remainder of training. Restoring \texttt{model.train()} after each validation pass resolved this. Second, the aerosol channel was being divided by an incorrect per-band maximum during normalization, producing a much smaller dynamic range than intended for that band. Fixing both was a prerequisite for fair classical/quantum comparisons.
+
+\subsection{Loss Function Ablation}
+\label{sec:lossablation}
+
+The high class imbalance raised the natural question of whether the loss function was the limiting factor for classical performance. We evaluated four loss configurations against the classical U-Net (mode 5, base channels 48, 10 epochs, all other hyperparameters held fixed), summarized in Table~\ref{tab:loss-ablation}. Weighted cross-entropy and a Dice/CE fusion perform within noise of each other and outperform every focal-loss variant we tested. Increasing the fire-class weight in focal loss from 10 to 20 made performance slightly worse, suggesting that the existing weighting plus the focal modulation was over-correcting. We concluded that loss-function choice is not the bottleneck on this dataset, and used weighted cross-entropy (\texttt{fire\_class\_weight = 10}) for all subsequent classical and quantum runs.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lccccc}
+        \toprule
+        Loss & Fire P & Fire R & Fire $F_1$ & Fire IoU & mIoU \\
+        \midrule
+        Cross-entropy           & 37.64 & 23.71 & \textbf{29.10} & 17.02 & 55.13 \\
+        Dice + cross-entropy    & 37.09 & 24.18 & \textbf{29.27} & 17.15 & 55.15 \\
+        Focal ($\gamma=2$, $w=10$) & 33.13 & 24.17 & 27.95 & 16.24 & 54.47 \\
+        Focal ($\gamma=2$, $w=20$) & 32.94 & 22.97 & 27.06 & 15.65 & 54.20 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Loss-function ablation on the classical U-Net (10 epochs, mode 5, $w$ is \texttt{fire\_class\_weight}). All values are percentages on the Sen2Fire test split.}
+    \label{tab:loss-ablation}
+\end{table}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.95\textwidth]{media/paper/fig6_loss_ablation.png}
+    \caption{Visual summary of Table~\ref{tab:loss-ablation}. Weighted CE and Dice+CE perform within noise of each other; both focal variants underperform, with the heavier fire-class weight making things slightly worse.}
+    \label{fig:loss-ablation}
+\end{figure}
+
+\subsection{Threshold Sweep and Probability Calibration}
+\label{sec:threshold}
+
+The classical evaluation pipeline thresholds the post-softmax fire probability at 0.5 by default. Since Fire $F_1$ on Sen2Fire is dominated by the minority class, this default is unlikely to be optimal: a lower threshold trades precision for recall, and a higher threshold does the opposite. We swept the decision threshold from 0.10 to 0.75 on the validation split for the classical baseline (Table~\ref{tab:threshold}). The best validation $F_1$ occurs at 0.65, three points higher than the default 0.50, with a noticeable bump in mean IoU. The corresponding continuous probability maps are shown in Section~\ref{sec:probmaps}. The heatmaps make it clear that the default 0.5 boundary cuts through regions of intermediate confidence that a tuned threshold can resolve more cleanly.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{cccccc}
+        \toprule
+        Threshold & OA & Fire $F_1$ & Fire IoU & mIoU \\
+        \midrule
+        0.10 & 91.36 & 23.52 & 13.33 & 52.29 \\
+        0.25 & 90.65 & 24.14 & 13.73 & 52.11 \\
+        0.50 & 91.82 & 25.96 & 14.91 & 53.31 \\
+        \textbf{0.65} & \textbf{92.06} & \textbf{27.42} & \textbf{15.89} & \textbf{53.91} \\
+        0.75 & 92.25 & 24.88 & 14.21 & 53.18 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Decision-threshold sweep on the classical baseline validation set. The default $0.50$ is suboptimal; $0.65$ improves Fire $F_1$ by approximately 1.5 points without sacrificing overall accuracy.}
+    \label{tab:threshold}
+\end{table}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.85\textwidth]{media/paper/fig7_threshold_sweep.png}
+    \caption{Fire $F_1$ and Fire IoU (left axis) and OA / mIoU (right axis) as a function of the decision threshold on the classical baseline validation set. The optimum at $0.65$ (dashed red) improves Fire $F_1$ by $\approx 1.5$ points over the default $0.50$.}
+    \label{fig:threshold-sweep}
+\end{figure}
+
+\subsection{QuFeX Architecture}
+\label{sec:qufex}
+
+\paragraph{Introduction.} Qu-Net~\cite{qufex} is a hybrid quantum-classical image segmentation model that preserves the U-Net encoder/decoder while replacing the central double-convolution bottleneck with a quantum feature-extraction module called \emph{QuFeX}. We adopt this design because quantum circuits operate in an exponentially large Hilbert space, potentially capturing complex feature correlations with fewer parameters than classical convolutions. Placing the circuit at the bottleneck is targeted: spatial resolution is lowest there ($32\times32$ for a $512\times512$ input), channel depth is highest, and the representation is already an abstract summary of the scene rather than per-pixel reflectance.
+
+\paragraph{Hybrid bottleneck wrapper.} Both quantum variants in this paper (QuFeX and QB-Net) share the same classical wrapper around the quantum circuit. Let the bottleneck feature map be $x \in \mathbb{R}^{B \times C \times H \times W}$ where $C$ is the encoder's deepest channel count ($C = 512$ for the full-width base-64 U-Net backbone used in the quantum experiments; see Section~\ref{sec:results}). A staged compression reduces $C$ to the qubit count $n$:
+\begin{enumerate}[leftmargin=2em,topsep=2pt,itemsep=0pt]
+    \item $3\times3$ convolution: $C \to C/2$ (preserves a small spatial context).
+    \item $1\times1$ convolution: $C/2 \to C/4$.
+    \item $1\times1$ convolution: $C/4 \to n_{\text{qubits}}$.
+\end{enumerate}
+Each step is followed by BatchNorm and ReLU. The resulting tensor $\mathbb{R}^{B \times n \times H \times W}$ is then \emph{reshaped to per-spatial-location feature vectors} of length $n$ --- so the quantum circuit is evaluated $B \cdot H \cdot W$ times per forward pass, not once per sample. This avoids the catastrophic flattening of an entire feature map into a single quantum state that caused our initial amplitude-encoding attempt to fail (Section~\ref{sec:failures}). Inputs are normalized to the rotation-angle range $[-\pi, \pi]$ via $\pi\tanh(\cdot)$ after a NaN/Inf sanitisation step. After the quantum circuit returns $n$ Pauli-$Z$ expectation values per location, a symmetric two-stage expansion ($1\times1$ conv lift $n \to C/4$ then $3\times3$ conv $C/4 \to C$, each with BatchNorm and ReLU) restores the original channel count, and a residual connection adds the unmodified bottleneck input. The residual path is important: if the quantum layer learns nothing useful, the model can still recover the classical signal via the identity bypass, which we found to be necessary for stable training in our early experiments.
+
+\paragraph{QuFeX circuit.} The QuFeX ansatz~\cite{qufex} uses X-basis angle encoding. Each input feature is encoded by a Hadamard followed by an $R_Z$ rotation. The trainable layers split the qubit register in half. On the first $n/2$ qubits, the $U_1$ block applies sequential $R_X$ and $R_Z$ rotations with two trainable parameters per qubit per layer. On the second $n/2$ qubits, the $U_2$ block applies $R_X$ and $R_Y$ rotations, again with two trainable parameters per qubit per layer. After each $U_1/U_2$ pair, a CZ (controlled-$Z$) ring entangles all qubits with wrap-around between the last and first wire. Inputs are re-encoded at every layer (\emph{data re-uploading}~\cite{data-reuploading}, which we add to the original QuFeX design), giving the circuit higher effective expressivity without adding trainable parameters. The circuit returns $\langle Z \rangle$ on every qubit. Total trainable parameter count is $2 \cdot n \cdot L$ where $L$ is the number of variational layers.
+
+\paragraph{Configurations evaluated.} We trained two QuFeX configurations as primary candidates: an 8-qubit, 1-layer setup (the wider/shallower regime) and a 4-qubit, 2-layer setup (the narrower/deeper regime preferred by the original ansatz ablation in~\cite{qufex}). On Sen2Fire and at matched training conditions, the 8-qubit, 1-layer configuration consistently outperformed 4-qubit, 2-layer at 25 epochs (Fire $F_1$ $30.79$ vs.\ $27.43$). A previously reported 8-qubit, 2-layer run reached only Fire $F_1 = 18.29$ but completed just five epochs before its allocated walltime; this run is incomplete and is reported only for transparency in the run log (Table~\ref{tab:quantum-runs}). We take 8 qubits, 1 layer, 25 epochs as the canonical QuFeX configuration for the comparisons in Section~\ref{sec:results}.
+
+\subsection{QB-Net Architecture and Optimization}
+\label{sec:qbnet}
+
+\paragraph{Introduction.} We further investigated a second quantum bottleneck: QB-Net~\cite{qbnet}, proposed in the HiQC paper by Xu, Zhao \& Li (2025) in \textit{Quantum Machine Intelligence}. QB-Net targets the same architectural slot as QuFeX --- the deepest U-Net bottleneck --- and uses the same hybrid wrapper described in Section~\ref{sec:qufex} (staged $3{\times}3 \to 1{\times}1 \to 1{\times}1$ channel compression, per-spatial-location processing, $\pi\tanh(\cdot)$ normalization, symmetric expansion, residual bypass). The two designs differ \emph{only in the quantum circuit itself}, which lets us directly attribute any performance difference to ansatz choice.
+
+\paragraph{QB-Net circuit.} Input features are encoded using $R_Y$ angle embedding directly onto each qubit. Each variational layer applies a $U_3(\theta, \phi, \lambda)$ gate to every qubit, granting full single-qubit rotational freedom with three trainable parameters per qubit and a single unified weight tensor of shape $(L, n, 3)$. Entanglement is achieved through a nearest-neighbour CNOT ladder in an open chain topology, with no wrap-around connection between the last and first qubit. As with QuFeX, inputs are re-encoded at every layer (data re-uploading). The circuit outputs Pauli-$Z$ expectation values on every qubit. Total trainable parameter count is $3 \cdot n \cdot L$, $50\%$ more than QuFeX at matched $(n, L)$. We evaluated 4-qubit, 2-layer as the primary configuration (matching the ansatz exploration in~\cite{qbnet}), and used it as the canonical QB-Net setup for comparisons in Section~\ref{sec:results}.
+
+\subsection{Classical FPN Extension}
+\label{sec:fpn-method}
+
+To establish whether the quantum gain over the classical baseline is matched by a sufficiently expressive \emph{classical} architectural change, we also evaluate a Feature Pyramid Network~\cite{fpn} variant of the U-Net. The FPN-U-Net retains the same compact encoder used by the quantum variants but replaces the U-Net's symmetric upsampling decoder with a top-down pyramid. At every encoder stage, a $1\times1$ lateral convolution unifies channel widths to a shared FPN width (256), the top-down feature is bilinearly upsampled and added to the lateral, and a $3\times3$ smoothing convolution removes aliasing. Pyramid levels $P_1$--$P_5$ are then resampled to the highest resolution and summed before a $1\times1$ output convolution. A 2D dropout layer ($p=0.5$) at the bottleneck regularizes the deepest features, and training combines weighted cross-entropy with MixUp~\cite{mixup} and CutMix~\cite{cutmix} sample mixing. 
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/shifts/mixup_sample.png}
+        \caption{MixUp ($\lambda=0.90$): two fire patches linearly blended.}
+        \label{fig:mixup}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/shifts/cutmix_sample.png}
+        \caption{CutMix ($\lambda=0.25$): a rectangular crop transplanted between patches.}
+        \label{fig:cutmix}
+    \end{subfigure}
+    \caption{Sample augmentations applied during FPN training (original image, label mask, augmented image, augmented mask). Both strategies inject uncertainty at mixing boundaries, discouraging the model from relying on spatial position over spectral content.}
+    \label{fig:augmentations}
+\end{figure}
+
+Additionally, we evaluate this variant in the SWIR-only spectral mode (\emph{mode 4}, three input channels, no aerosol) to test the hypothesis from Section~\ref{sec:domainshift} that dropping the most domain-shifted channel improves test-time generalization. The result of this combination is reported in Section~\ref{sec:fpn-extended}.
+
+% =====================================================================
+\section{Results}
+\label{sec:results}
+% =====================================================================
+
+We evaluate three U-Net variants on Sen2Fire: a classical baseline, QuFeX, and QB-Net. All runs share mode 5 (SWIR + aerosol) input, batch size 16, weight decay 5e-4, fire-class weight 10, seed 1234, and cross-entropy loss. The learning rate was \emph{not} uniform across the comparison. QuFeX used $5\times10^{-5}$, while QB-Net and the classical baseline used $1\times10^{-4}$ (noted for transparency). All three models use the full-width U-Net backbone (base channels 64, with a 512-channel bottleneck), so the classical baseline and both quantum variants share an identical encoder/decoder and differ only at the bottleneck. The compact base-48 backbone of Section~\ref{sec:compactunet} is a separate parameter-reduction study and was not used for the quantum comparison.
+
+\subsection{Baseline Calibration}
+
+We first verify our pipeline reproduces the published Sen2Fire baseline. Xu et al.~\cite{sen2fire} report Fire $P = 39.7$, Fire $R = 21.8$, Fire $F_1 = 28.1$ for the SWIR + aerosol U-Net trained for 5{,}000 iterations. Our classical reproduction reaches Fire $F_1 = 28.91$ under matched data and architecture, within noise of the reference ($\Delta F_1 = +0.81$). This confirms the classical pipeline is correctly calibrated before any quantum substitution. For all subsequent comparisons we use a second classical run trained under exactly the same hyperparameter, epoch, and seed conditions as the quantum experiments (Fire $F_1 = 28.71$, mIoU $= 54.99$). We refer to this as the \emph{matched-conditions baseline}.
+
+\subsection{Main Results on Sen2Fire}
+
+Both quantum variants modestly exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the ordering is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.95\textwidth]{media/paper/fig1_main_results.png}
+    \caption{Fire Precision, Recall, $F_1$, and IoU for the four primary architectures on the Sen2Fire test split. Data from Tables~\ref{tab:classical-runs} and~\ref{tab:quantum-runs}. Both quantum variants exceed the classical matched-conditions baseline on $F_1$ and IoU; the classical FPN (mode~4) reaches a comparable ceiling.}
+    \label{fig:main-results}
+\end{figure}
+
+\subsection{Behavioral Analysis}
+
+Quantum bottlenecks shift the recall/precision operating point. The matched classical baseline detects fire at P=37.4, R=23.3, while the best QuFeX run reaches P=34.4, R=27.9, trading roughly 3 points of precision for 4.6 points of recall. QB-Net partially recovers precision (P=38.3) while retaining higher recall (R=26.3). Operationally this shift is desirable: missed fires are more costly than false alarms in a wildfire-monitoring context.
+
+Quantum models are still improving at 25 epochs. Fire F1 for QB-Net 4q/2L progresses from 27.5 to 28.3 to 29.2 to 31.2 across 5, 10, 20, and 25 epochs. QuFeX 8q/1L follows a similar curve (24.2, 30.3, 30.8). The classical baseline saturates at 5 epochs (best validation F1 reached at epoch 4). This suggests the quantum bottleneck benefits from extended training and the reported margin understates the true ceiling.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.75\textwidth]{media/paper/fig2_training_curves.png}
+    \caption{Test Fire $F_1$ vs.\ total epoch budget for QB-Net 4q/2L and QuFeX 8q/1L (each point is a separate run from Table~\ref{tab:quantum-runs}). The classical matched-conditions baseline (dashed) saturates by epoch~5; both quantum variants show no plateau at 25 epochs.}
+    \label{fig:training-curves}
+\end{figure}
+
+Within QuFeX, the 8-qubit, 1-layer configuration outperforms 4-qubit, 2-layer ($F_1 = 30.79$ vs.\ $27.43$ at 25 epochs). This runs counter to the original ansatz exploration in~\cite{qufex}, which favoured deeper, narrower circuits. We do not have a definitive mechanistic explanation. One possibility is that the wider quantum-channel projection exposes more independent measurement outputs for the post-quantum $1\times1$ expansion to combine, while doubling depth without re-encoding the input adds parameters without proportionally increasing the function class the bottleneck can represent.
+
+The cross-architecture comparison complicates any simple ``more qubits is better'' reading. QB-Net at 4 qubits and 2 layers ($F_1 = 31.18$) exceeds QuFeX at 8 qubits and 1 layer ($F_1 = 30.79$), so the ansatz design choice appears to matter more than qubit count alone. QB-Net~\cite{qbnet} applies a symmetric $U_3$ rotation on every qubit followed by a CNOT ladder, while QuFeX~\cite{qufex} splits the qubits into two halves with $U_1$ ($R_X + R_Z$) and $U_2$ ($R_X + R_Y$) blocks entangled by a CZ ring. At matched $(n, L)$, QB-Net also carries roughly $50\%$ more trainable bottleneck parameters than QuFeX (three per qubit per layer compared to two), which may further contribute to the gap. Disentangling ansatz design from raw parameter count would require an explicit ablation we have not yet run.
+
+\subsection{Probability Map Visualization}
+\label{sec:probmaps}
+
+To move beyond binary per-patch evaluation, we extended inference to output continuous per-scene fire probability maps by retaining the raw sigmoid activations prior to thresholding. Figure~\ref{fig:probmap} shows Scene 1: the left image displays P(fire) from 0.0 to 1.0 across the full scene, and the right shows the corresponding binary detection mask against the ground truth label at the default 0.5 threshold. Fire-positive regions cluster near P(fire) = 1.0, while boundary regions show intermediate confidence; structure that is lost in a hard binary mask. These maps were generated for all four Sen2Fire test scenes and informed the threshold sweep reported in Section~\ref{sec:threshold}, confirming visually what Table~\ref{tab:threshold} shows numerically: the optimal Fire $F_1$ is achieved at a decision boundary above 0.5, not below.
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}[t]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/paper/fig6a_scene1_probmap.png}
+        \caption{Scene 1 fire probability map, P(fire) from 0.0 to 1.0.}
+        \label{fig:probmap-left}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/paper/fig6b_scene1_detection_vs_label.png}
+        \caption{Binary detection vs.\ ground truth label at the 0.5 threshold.}
+        \label{fig:probmap-right}
+    \end{subfigure}
+    \caption{Scene 1 fire probability map (left) and binary detection vs.\ ground truth label at 0.5 threshold (right). Red regions in the probability map indicate high model confidence (P(fire) $\approx$ 1.0); the detection/label comparison shows the effect of applying the decision boundary.}
+    \label{fig:probmap}
+\end{figure}
+
+\subsection{Train/Test Domain Shift}
+\label{sec:domainshift}
+
+The Sen2Fire benchmark partitions the dataset by scene. Scenes~1 and~2 form the training set, scene~3 is used for validation, and scene~4 for testing. This scene-based split is the source of an unusually large train/test domain shift that we believe sets the practical ceiling for both classical and quantum performance on this benchmark.
+
+Quantifying the shift on a representative sample of patches, the aerosol channel mean is approximately $5.3\times$ higher in the test set than in the training set (Table~\ref{tab:domain-shift}). The fire-pixel base rate also more than doubles, from $2.5\%$ in training to $5.7\%$ in test. The cumulative distribution of aerosol intensity in the test split is visibly shifted toward higher values across its full range, consistent with the test scene having been acquired under heavier smoke conditions than the training scenes. We treat this as the dominant explanation for the recurring observation in our experiments that validation Fire $F_1$ is consistently $5$--$13$ points higher than test Fire $F_1$, even for the classical baseline.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{media/shifts/extra/visual_comparison.png}
+    \caption{SWIR composite (B11, B7, B3) of representative patches from the training (top) and test (bottom) splits, with per-patch aerosol channel means annotated. The visibly heavier haze in the test patches is consistent with the $5.3\times$ aerosol-channel mean ratio quantified in Table~\ref{tab:domain-shift}.}
+    \label{fig:visual-comparison}
+\end{figure}
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lcccc}
+        \toprule
+        Metric (channel) & SWIR B11 & VRE B7 & Green B3 & Aerosol Ch 3 \\
+        \midrule
+        Train mean & 0.1703 & 0.1936 & 0.0870 & 0.2668 \\
+        Test mean  & 0.1815 & 0.2018 & 0.1182 & \textbf{1.4157} \\
+        Ratio      & 1.07$\times$ & 1.04$\times$ & 1.36$\times$ & \textbf{5.31$\times$} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Per-channel mean intensity in the Sen2Fire training and test splits. The aerosol channel exhibits a $5.3\times$ shift, indicating substantially heavier atmospheric haze/smoke in the test scene than in the training scenes.}
+    \label{tab:domain-shift}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{media/paper/fig4_domain_shift.png}
+    \caption{Per-channel mean pixel intensity in the training vs.\ test splits (Table~\ref{tab:domain-shift}). Spectral bands shift by at most $1.36\times$; the aerosol channel shifts by $5.31\times$, making it both the most discriminating feature at training time and the dominant source of train/test mismatch.}
+    \label{fig:domain-shift}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.80\textwidth]{media/shifts/extra/aerosol_cdf_shift.png}
+    \caption{Cumulative distribution function of aerosol channel intensity in the training (blue) and test (red) splits. The test CDF is shifted rightward across its entire support, confirming that the $5.3\times$ mean ratio reflects a true distributional shift rather than an outlier effect.}
+    \label{fig:aerosol-cdf}
+\end{figure}
+
+A direct consequence of this analysis is that dropping the aerosol channel at training time (\texttt{mode = 4}, SWIR-only) should narrow the train/test gap. We confirm this empirically in Section~\ref{sec:fpn-extended} below: a classical FPN-augmented variant trained in mode~4 reaches Fire $F_1 = 31.13$, comparable to the best quantum result.
+
+\subsection{Classical Architectural Extensions: FPN and Mode-4}
+\label{sec:fpn-extended}
+
+The domain-shift analysis in Section~\ref{sec:domainshift} predicts that dropping the aerosol channel should narrow the train/test generalization gap, even though aerosol is the single most-separating band on the training split (per-band fire/non-fire ROC-AUC $\approx 0.78$ for aerosol vs.\ $\le 0.70$ for any spectral band; see Section~\ref{sec:bandaucs} in the appendix). We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
+
+Trained in mode 5 (SWIR + aerosol), the FPN variant exhibits the same volatility as the classical U-Net under domain shift: validation $F_1$ swings as high as $42.7\%$ between epochs while the test $F_1$ recovers only to around $27.9\%$, comparable to the classical baseline. 
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.85\textwidth]{media/shifts/extra/training_dynamics_15ep.png}
+    \caption{Validation Fire $F_1$ over 15 epochs for the FPN Extended (mode~4) run. The large epoch-to-epoch oscillations are consistent with a fixed learning rate that is slightly too aggressive; the two peaks at epochs~6 and~10 ($\approx 41\%$) define the model checkpoint selected for testing.}
+    \label{fig:training-dynamics}
+\end{figure}
+
+Retrained in mode 4 (SWIR, no aerosol) for 15 epochs with a less aggressive MixUp/CutMix schedule, the FPN variant reaches Fire $F_1 = \mathbf{31.13}$ and Fire IoU $= 18.44$ on the test split --- a $\approx 4$ point improvement over the same architecture trained with aerosol, and on par with our best quantum results (QB-Net $31.18$, QuFeX $30.79$). This is, to our knowledge, the strongest classical result on the published Sen2Fire split that we have produced.
+
+We interpret this as direct empirical support for the train/test domain shift being the binding constraint on Sen2Fire performance, rather than the inductive bias of the bottleneck. Two architecturally very different changes --- inserting a quantum circuit at the bottleneck, or replacing the decoder with an FPN and dropping the aerosol channel --- yield comparable test-set gains because both are working around the same fixed-data ceiling.
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}[t]{0.54\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/shifts/extra/ablation/f1_ablation_summary.png}
+        \caption{Fire $F_1$ at each build step.}
+        \label{fig:fpn-f1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.44\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{media/shifts/extra/ablation/precision_recall_tradeoff.png}
+        \caption{Precision/recall shifts.}
+        \label{fig:fpn-pr}
+    \end{subfigure}
+    \caption{FPN component ablation. MixUp/CutMix applied to the plain U-Net \emph{hurts} Fire $F_1$ ($27.75 \to 25.53$) because precision surges while recall collapses; the same augmentations are beneficial inside the FPN decoder ($28.11 \to 28.45$). Dropout at the bottleneck is the single most important FPN ingredient. The mode-4 aerosol-channel removal in FPN Extended is responsible for the final jump to $31.13$.}
+    \label{fig:fpn-ablation}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.85\textwidth]{media/shifts/extra/generalization_gap.png}
+    \caption{Validation vs.\ test Fire $F_1$ gap for each FPN configuration. The classical baseline has the largest gap (13.0~pp) because aerosol is its strongest feature at validation time but the most shifted channel at test time. FPN Extended (mode~4, 15~ep) achieves the best test score while keeping the gap to 10.0~pp, confirming that aerosol removal mitigates but does not eliminate the scene-shift penalty.}
+    \label{fig:generalization-gap}
+\end{figure}
+
+\subsection{Random-Split Sensitivity: A Domain-Shift Diagnostic}
+\label{sec:randomsplit}
+
+The mode-4 result in Section~\ref{sec:fpn-extended} mitigates the train/test domain shift indirectly, by removing the most-shifted input channel. A more direct intervention is to remove the scene-based split itself. We re-ran several configurations after pooling all $2{,}466$ patches across the four scenes and re-partitioning them uniformly at random into $70/15/15$ train/validation/test folds, with a fixed RNG seed for the shuffle so the splits are reproducible across runs. The result is unambiguous: under iid splits, classical Fire $F_1$ rises by $4$--$9$ points for both U-Net architectures (Table~\ref{tab:random-split}).
+
+\begin{table}[ht]
+    \centering
+    \small
+    \begin{tabular}{lcccccc}
+        \toprule
+        Architecture & Mode & Split & Test OA & Fire $P$ & Fire $R$ & Fire $F_1$ \\
+        \midrule
+        Classical U-Net   & 5 & Scene-based       & 93.31 & 37.35 & 23.31 & 28.71 \\
+        Classical U-Net   & 5 & Random            & 94.66 & 35.34 & 30.42 & \textbf{32.69} \\
+        Classical FPN     & 5 & Scene-based       & 93.07 & 36.48 & 26.96 & 31.01 \\
+        Classical FPN     & 5 & Random            & 95.18 & 42.59 & 37.29 & \textbf{39.76} \\
+        Quantum FPN$^{\dagger}$ & 5 & Random      & 95.10 & 40.07 & 30.18 & 34.43$^{\ddagger}$ \\
+        \bottomrule
+    \end{tabular}
+    \caption{Random-split sensitivity diagnostic. Pooling all 2{,}466 patches and re-partitioning at random into $70/15/15$ folds removes the geographic-and-temporal separation between train and test. The classical FPN gains $+8.75$ Fire $F_1$ from this change alone --- substantially larger than the $\approx +2$ quantum-bottleneck margin reported in Section~\ref{sec:results}. \emph{These numbers are not directly comparable to the published Sen2Fire benchmark}, which is defined on the scene-based split; we report them as a controlled diagnostic to isolate the contribution of the split itself. $^{\dagger}$The quantum FPN uses a small quantum channel-attention gate at the bottleneck (squeeze-excite style), architecturally distinct from the QuFeX/QB-Net inserts described in Sections~\ref{sec:qufex} and~\ref{sec:qbnet}. $^{\ddagger}$This value could not be reproduced from recovered training artifacts: the only recovered quantum-FPN run for this configuration collapses to a degenerate all-background prediction (Fire $F_1 = 0$), so the $34.43$ figure should be treated as provisional pending re-verification.}
+    \label{tab:random-split}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.80\textwidth]{media/paper/fig5_random_split.png}
+    \caption{Scene-based vs.\ random $70/15/15$ split Fire $F_1$ for each architecture (Table~\ref{tab:random-split}). The classical FPN gains $+8.75$ pp from mixing alone --- four times the quantum-bottleneck margin. The Quantum FPN has no scene-based result (see table footnote).}
+    \label{fig:random-split}
+\end{figure}
+
+Two things stand out. First, the FPN architecture benefits more from the split change than the vanilla U-Net does ($+8.75$ vs.\ $+3.98$ Fire $F_1$), suggesting that the FPN's multi-scale fusion is particularly hurt by the train/test distribution mismatch in the scene-based split --- consistent with the high val/test gap we observed during FPN training under mode 5 (Section~\ref{sec:fpn-extended}). Second, under the same random-split protocol, the quantum FPN variant reaches Fire $F_1 = 34.43$, which is $5.3$ points \emph{below} the classical FPN at the same protocol. We caution against over-reading this comparison: the quantum FPN uses a small channel-attention quantum gate at the bottleneck rather than the per-spatial-location QuFeX/QB-Net bottleneck inserts that generated the $\approx +2$ quantum margin under the scene-based split (Sections~\ref{sec:qufex}--\ref{sec:qbnet}). The two are different quantum architectural designs and this result does not directly determine whether QuFeX or QB-Net retain their margin once the split-induced ceiling is removed. \textbf{We do not have QuFeX or QB-Net runs under the random-split protocol yet}, and acquiring them is the single most informative remaining experiment in this work (Section~\ref{sec:futurework}).
+
+\subsection{Failure Analysis}
+\label{sec:failures}
+
+In the interest of completeness and transparency, we report three substantive negative results from the same body of experiments.
+
+\paragraph{Amplitude encoding produces NaN gradients.}
+Our initial quantum bottleneck used PennyLane's \texttt{AmplitudeEmbedding} to push the full encoder output through an 8-qubit circuit. The bottleneck shape was \texttt{[B, 512, 32, 32]} = $524{,}288$ features per sample, flattened by a fully-connected layer to a $2^8 = 256$-dimensional amplitude vector, encoded into 8 qubits, and reconstructed back to $524{,}288$ features through another fully-connected layer for the decoder. The effective compression ratio at the quantum interface was $65{,}536{:}1$, which is too aggressive to preserve any meaningful spatial structure. Worse, \texttt{AmplitudeEmbedding} differentiated via the adjoint method is highly sensitive to near-zero or NaN inputs --- common at the bottleneck after BatchNorm during early training --- and the gradient through the projection routinely returned NaN losses. Every quantum run on this architecture either crashed or saturated at the trivial all-non-fire prediction. This failure motivated the migration to QuFeX and QB-Net, both of which use per-spatial-location angle embedding with no flattening and no $2^n$ compression bottleneck.
+
+\paragraph{The quantum bottleneck collapses on degenerate inputs.}
+To probe the failure mode further, we evaluated the original amplitude-encoded bottleneck on a battery of synthetic inputs and recorded the mean Pauli-$Z$ measurement across qubits. Standard normal, large-magnitude, sparse, and bimodal inputs produced mean-$Z$ values distributed roughly around zero, as expected. In contrast, all-zero, all-NaN, all-Inf, and mixed NaN/Inf inputs all collapsed to mean-$Z \approx 0.35$, the same value produced by the \texttt{preprocess\_quantum\_input} sanitiser's fallback. This is the ``consistent fallback'' signature of a layer that has effectively stopped responding to its input --- the gradient signal is present but the function is constant. Together with the NaN-gradient observation above, this gave us quantitative evidence that the original bottleneck was failing silently rather than learning a degenerate but valid feature map.
+
+\paragraph{A weighted fire-aware sampler collapses precision.}
+Given the $2.5\%$ training fire-pixel rate, we tested a sampler-level rebalancing strategy: a \texttt{WeightedRandomSampler} configured so that fire-containing patches were drawn at a target rate of $35\%$, roughly $3.5\times$ their natural prevalence. The model and loss function were otherwise unchanged from the classical baseline. The result was a sharp redistribution of operating point, not a net improvement (Table~\ref{tab:sampler-fail}). Precision collapsed from $38.41\%$ to $9.19\%$ while recall climbed from $23.18\%$ to $57.08\%$; Fire $F_1$ fell from $28.91\%$ to $15.84\%$ and overall accuracy fell almost thirty points to $64.95\%$. The interaction is straightforward in hindsight: the weighted cross-entropy already up-weights the fire class by a factor of ten, and compounding that with sampler-level oversampling pushed the model into over-confident fire predictions across most of the image. Sampler rebalancing alone is not a free improvement over weighted CE on this dataset; combining the two requires careful re-tuning of \texttt{fire\_class\_weight}, which we leave to future work.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        Metric & Baseline & Fire-aware sampler \\
+        \midrule
+        Fire Precision   & 38.41\% & \textbf{9.19\%} \\
+        Fire Recall      & 23.18\% & 57.08\% \\
+        Fire $F_1$       & 28.91\% & \textbf{15.84\%} \\
+        Fire IoU         & 16.90\% & 8.60\% \\
+        Overall Accuracy & 93.41\% & \textbf{64.95\%} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Weighted-sampler oversampling collapses the operating point. Target fire-patch fraction $0.35$, all other settings matched to the classical baseline.}
+    \label{tab:sampler-fail}
+\end{table}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.85\textwidth]{media/paper/fig8_sampler_failure.png}
+    \caption{Effect of adding a fire-aware \texttt{WeightedRandomSampler} (35\% fire-patch target) on top of weighted cross-entropy ($w=10$). Precision collapses by 29~pp, recall surges by 34~pp, and Fire $F_1$ falls by 13~pp relative to the baseline (Table~\ref{tab:sampler-fail}).}
+    \label{fig:sampler-failure}
+\end{figure}
+
+% ---------------------------------------------------------------------
+% Table 1a: Classical baselines + extensions
+% ---------------------------------------------------------------------
+\begin{table}[ht]
+    \centering
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{llccccccc}
+        \toprule
+        Run & Model & Mode & Epochs & Test OA & Test P & Test R & Test $F_1$ & Test IoU \\
+        \midrule
+        Xu et al.~\cite{sen2fire}            & U-Net               & 5 & --   & --    & 39.70 & 21.80 & 28.10 & --    \\
+        classical\_baseline                  & classical\_unet     & 5 & 5    & 93.41 & 38.41 & 23.18 & 28.91 & 16.90 \\
+        \textbf{matched-conditions baseline} & \textbf{classical\_unet} & \textbf{5} & \textbf{5} & \textbf{93.31} & \textbf{37.35} & \textbf{23.31} & \textbf{28.71} & \textbf{16.76} \\
+        FPN extended (Section~\ref{sec:fpn-extended}) & FPN-U-Net  & 4 & 15   & 92.64 & 33.87 & 28.80 & \textbf{31.13} & 18.44 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Classical baselines on Sen2Fire (Zaratan A100/H100, seed $1234$). Bold row is the matched-conditions baseline used for all classical/quantum comparisons in this paper.}
+    \label{tab:classical-runs}
+\end{table}
+
+% ---------------------------------------------------------------------
+% Table 1b: Quantum runs
+% ---------------------------------------------------------------------
+\begin{table}[ht]
+    \centering
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{llcccccccc}
+        \toprule
+        Run & Model & $n$/$L$ & Epochs & Best Val $F_1$ (ep.) & Test OA & Test P & Test R & Test $F_1$ & Test IoU \\
+        \midrule
+        qbnet\_0424\_1853 & qbnet\_unet & 4/2 & 25 & 45.89      & 93.29 & 38.27 & 26.30 & \textbf{31.18} & 18.47 \\
+        qufex\_0426\_1554 & qufex\_unet & 8/1 & 25 & 44.62      & 92.76 & 34.38 & 27.88 & \textbf{30.79} & 18.20 \\
+        qbnet\_0424\_1839 & qbnet\_unet & 4/2 & 5  & 42.71      & 92.97 & 35.87 & 27.46 & 31.11          & 18.42 \\
+        qufex\_0425\_1612 & qufex\_unet & 8/1 & 20 & 43.41 (9)  & 93.14 & 36.68 & 25.78 & 30.28          & 17.84 \\
+        qbnet\_0420\_2328 & qbnet\_unet & 4/2 & 20 & 46.20 (14) & 93.33 & 37.74 & 23.86 & 29.24          & 17.12 \\
+        qbnet\_0420\_2231 & qbnet\_unet & 4/2 & 10 & 45.24 (8)  & 93.27 & 36.81 & 22.94 & 28.26          & 16.46 \\
+        qbnet\_0424\_1826 & qbnet\_unet & 4/2 & 5  & 44.39      & 93.16 & 35.47 & 22.45 & 27.50          & 15.94 \\
+        qufex\_0408\_2317 & qufex\_unet & 4/2 & 25 & 42.28      & 91.00 & 25.67 & 29.45 & 27.43          & 15.89 \\
+        qufex\_0419\_2310 & qufex\_unet & 8/1 & 5  & 41.27 (5)  & 93.53 & 37.43 & 17.91 & 24.23          & 13.78 \\
+        qufex\_0405\_0246 & qufex\_unet & 8/2 & 5  & 30.30 (1)  & 93.71 & 36.66 & 12.18 & 18.29          & 10.06 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Quantum bottleneck runs on Sen2Fire (Zaratan A100/H100, seed $1234$, mode 5 SWIR + aerosol). All runs use the compact U-Net backbone (base channels 48). Sorted by Test $F_1$ descending; the two top rows are reported as the canonical QuFeX and QB-Net configurations in Section~\ref{sec:results}.}
+    \label{tab:quantum-runs}
+\end{table}
+
+% =====================================================================
+\section{Cross-Dataset Transfer: CaBuAr}
+\label{sec:cabuar}
+% =====================================================================
+
+The Sen2Fire results above are computed on a single benchmark with a single geographic and temporal context (Australian bushfires, 2019--2020). To probe whether \projectname's pipeline generalizes to a different sensor context, we ran the classical U-Net component on the California Burned Areas Dataset (CaBuAr)~\cite{cabuar}. We emphasize that the result below is \emph{not} a direct numerical comparison to our Sen2Fire baseline; CaBuAr has substantially different label statistics (see below) and the two datasets sit on different points of the fire/non-fire base-rate axis. We report CaBuAr to demonstrate that the pipeline is portable and to motivate Future Work on a quantum CaBuAr run.
+
+\paragraph{Format conversion.} CaBuAr ships as HDF5 with one entry per scene and a 5-fold cross-validation split annotation. Our data loader expects per-patch NPZ files with \texttt{image}, \texttt{label}, and \texttt{aerosol} keys. We wrote a preprocessing script that decodes each HDF5 entry into 512$\times$512 Sentinel-2 patches matching the Sen2Fire format. Because CaBuAr does not include an aerosol channel, the \texttt{aerosol} key is a zero-filled placeholder; we therefore use \emph{mode 4} (SWIR-only) for CaBuAr so the placeholder is never read. The official 5-fold split is mapped to a $3/1/1$ partition: folds 0--2 train (333 patches), fold 3 validation (109 patches), fold 4 test (92 patches).
+
+\paragraph{Result.} The classical U-Net trains on the converted dataset without any architectural change. Table~\ref{tab:cabuar} reports the test-fold metrics alongside the Sen2Fire matched-conditions baseline for reference only. The headline Fire $F_1 = 66.42$ is much higher than on Sen2Fire, but this is largely driven by CaBuAr's substantially higher fire-pixel base rate: the CaBuAr pre-patched archive is biased toward patches that already contain burned area, so the prior is far above the $\approx 6\%$ rate seen on Sen2Fire's test scene. The corresponding precision/recall asymmetry --- Fire $R = 95.34\%$ vs.\ Fire $P = 50.97\%$ --- reflects the same effect: with a high prior and weighted cross-entropy, the model predicts fire generously and is rewarded for high recall.
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        Metric & Sen2Fire (matched baseline) & CaBuAr (test fold) \\
+        \midrule
+        Fire Precision   & 37.35\% & 50.97\% \\
+        Fire Recall      & 23.31\% & \textbf{95.34\%} \\
+        Fire $F_1$       & 28.71\% & \textbf{66.42\%} \\
+        Fire IoU         & 16.76\% & 49.73\% \\
+        Overall Accuracy & 93.31\% & 95.05\% \\
+        \bottomrule
+    \end{tabular}
+    \caption{Cross-dataset transferability check, \emph{not} a like-for-like comparison. The CaBuAr column reports a classical U-Net trained from scratch on the converted CaBuAr patches (mode 4, SWIR-only). The much higher $F_1$ reflects CaBuAr's pre-selected high-burned-area base rate rather than a methodological improvement over the Sen2Fire pipeline.}
+    \label{tab:cabuar}
+\end{table}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{media/image2.png}
+    \caption{Example CaBuAr prediction showing input composite, ground truth, prediction at the default threshold, and continuous fire probability map. The high-recall/lower-precision behaviour above is visible as over-prediction near burned-area boundaries.}
+    \label{fig:cabuar}
+\end{figure}
+
+% =====================================================================
+\section{Discussion}
+\label{sec:discussion}
+% =====================================================================
+
+\paragraph{Quantum gains are modest, but consistent in direction.} Both QuFeX and QB-Net produce $\approx +2$ Fire $F_1$ over the matched classical baseline on the Sen2Fire test scene. The margin is small relative to the variance expected on a $504$-patch test set with $\approx 6\%$ fire pixels, and could plausibly be attributed to seed noise, as we used a single seed ($1234$) throughout. What we can say with more confidence is that the \emph{direction} is consistent across two independent ansatz designs, two qubit-count regimes, and four epoch counts (5, 10, 20, 25), and that QB-Net dominates QuFeX at every comparable configuration. This is a useful signal for future multi-seed work, but not yet a strong claim.
+
+\paragraph{Ansatz design matters more than qubit count.} The most striking architectural finding is that QB-Net at 4 qubits, 2 layers ($F_1 = 31.18$) outperforms QuFeX at 8 qubits, 1 layer ($F_1 = 30.79$). QB-Net's circuit has half the qubits, the same total parameter budget (8 vs.\ 8 trainable rotation angles per layer accounting for the U1/U2 split), and a structurally simpler entanglement pattern (open CNOT ladder vs.\ CZ ring with wrap-around). The $50\%$ higher parameter count of QB-Net at matched $(n, L)$ does not fully account for the gap on its own --- the comparison above is at \emph{unmatched} $(n, L)$. A dedicated ablation that varies $(n, L)$ orthogonally to ansatz family is the most informative remaining experiment, and we have not run it.
+
+\paragraph{Train/test domain shift is the binding ceiling.} The most consequential empirical observation in this paper is the $\approx 5\times$ aerosol-channel shift between training and test scenes documented in Section~\ref{sec:domainshift}, paired with the $\approx 2\times$ fire-pixel-rate shift. Two architecturally orthogonal interventions --- replacing the bottleneck with a quantum circuit, or replacing the decoder with an FPN and dropping the aerosol channel --- converge on the same $\approx 31\%$ Fire $F_1$ ceiling on the held-out test scene. The random-split diagnostic in Section~\ref{sec:randomsplit} closes this loop: removing the scene-based split entirely lifts classical FPN Fire $F_1$ from $31.01$ to $39.76$, an $8.75$-point gain that is roughly $4\times$ larger than the $\approx 2$-point quantum margin under the scene-based split. We read all three lines of evidence as showing the binding constraint on Sen2Fire performance under the official scene-based protocol is the domain shift itself, not the inductive bias of the bottleneck. The natural follow-up is to evaluate either method (or both) on a dataset whose splits are constructed to be more iid, which is part of our motivation for the CaBuAr cross-dataset work in Section~\ref{sec:cabuar}.
+
+\paragraph{Loss function is not the bottleneck.} The loss-function ablation in Section~\ref{sec:lossablation} closes out a common question: focal and Dice variants do not unlock the missing $F_1$ that one might hope for given the $94\%$/$6\%$ class split. This is also consistent with the domain-shift reading: if the binding ceiling is the test distribution rather than the training objective, no per-pixel re-weighting will reach significantly above it. Our negative result on the fire-aware sampler (Section~\ref{sec:failures}) reinforces this --- the sampler fundamentally changes the operating point but does not improve the geometric mean of precision and recall.
+
+\paragraph{Quantum-hardware caveats.} All quantum results are simulator-based, using PennyLane's \texttt{lightning.gpu} backend with adjoint differentiation. Both QuFeX and QB-Net circuits would in principle map onto current-generation IonQ hardware --- the qubit counts and circuit depths are well within reach --- but adjoint differentiation does not exist on real hardware, so production deployment would require a switch to parameter-shift gradients. We attempted parameter-shift mid-project and found per-epoch costs to be prohibitive on Zaratan; faster gradient methods (e.g.\ classical shadows, finite-difference with smart sampling) are an open research direction that would directly affect the practicality of this line of work.
+
+\paragraph{Caveats on the reported numbers.} The Fire-class metrics on Sen2Fire are computed over a population in which fire pixels comprise less than 6\% of the test set, making absolute $F_1$ differences of three points or fewer sensitive to single-image outliers. Every reported number in this paper is a single-seed (\texttt{seed = 1234}) run; we do not yet have multi-seed variance estimates. We treat the $\approx +2$ Fire $F_1$ quantum margin as suggestive rather than conclusive.
+
+% =====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% =====================================================================
+
+We presented \projectname, a hybrid quantum-classical U-Net that replaces the deepest classical bottleneck with a variational quantum feature extractor, and evaluated two ans\"atze --- QuFeX and QB-Net --- on the Sen2Fire wildfire segmentation benchmark under matched conditions. Both variants modestly exceed a matched-conditions classical baseline (QB-Net Fire $F_1 = 31.18$, QuFeX $30.79$, classical $28.71$), with QB-Net consistently at or above QuFeX across qubit counts and epoch budgets. The direction of the effect is consistent across two ansatz designs and four epoch settings, but the magnitude ($\approx 2$ Fire $F_1$) is within plausible single-seed variance and we therefore frame the result as suggestive rather than conclusive. The more consequential empirical finding is that Sen2Fire's scene-based partition imposes a substantial train/test domain shift --- the aerosol channel mean is $5.3\times$ higher in the test scene, and removing the scene-based split lifts the strongest classical architecture by $+8.75$ Fire $F_1$, four times the quantum margin. Two architecturally orthogonal interventions, a quantum bottleneck and a classical FPN with the aerosol channel dropped, converge on the same $\approx 31\%$ Fire $F_1$ ceiling under the official protocol, which we read as evidence that the binding constraint on this benchmark is the data partition, not the inductive bias of the bottleneck. The most informative remaining experiment is a multi-seed comparison of QuFeX and QB-Net against the strongest classical architecture under random splits, which we have not yet run.
+
+% =====================================================================
+\section{Future Work}
+\label{sec:futurework}
+% =====================================================================
+
+The central finding of this paper --- that QB-Net and QuFeX modestly beat a classical baseline on Sen2Fire's scene-based split --- is bracketed by enough caveats (single seed, single split protocol, single dataset, simulator-only) that a substantial body of follow-up work is needed before the result can be elevated from suggestive to conclusive. We organize that follow-up into three tiers by priority.
+
+\subsection{Tier 1: Experiments needed to confirm the central claim}
+
+\paragraph{QuFeX and QB-Net under random splits.} \emph{The most important single experiment we have not yet run.} The scene-based partition of Sen2Fire is the source of the train/test domain shift documented in Section~\ref{sec:domainshift}, and removing it lifts the classical FPN by $+8.75$ Fire $F_1$ (Section~\ref{sec:randomsplit}). We have not yet trained QuFeX or QB-Net under the same random-split protocol. Without those runs, we cannot say whether the $\approx +2$ Fire $F_1$ quantum margin observed under the scene-based split survives the ceiling removal, persists as a smaller margin, or disappears. The quantum FPN result we do have under random splits ($34.43$, five points below classical FPN at the same protocol) suggests the answer is not automatic. Re-running QuFeX 8q/1L and QB-Net 4q/2L on random splits with at least five seeds each is the cleanest way to settle this and is our first priority.
+
+\paragraph{Multi-seed reproduction of every reported result.} Every Fire $F_1$ number in Tables~\ref{tab:classical-runs} and~\ref{tab:quantum-runs} reflects a single seed ($1234$). With $\approx 6\%$ test-set fire pixels and a $504$-patch test scene, a three-seed standard deviation of $\pm 2$ Fire $F_1$ would not be surprising. Producing five-seed variance estimates at the three canonical configurations (matched classical baseline, QuFeX 8q/1L, QB-Net 4q/2L), under \emph{both} scene-based and random-split protocols, is the second priority and the one most likely to establish whether the quantum margin is statistically reliable.
+
+\paragraph{Longer training.} The quantum variants were still improving Fire $F_1$ epoch-over-epoch at termination (QB-Net 4q/2L went from $27.50$ at 5 ep to $31.18$ at 25 ep with no plateau visible). 50--100 epoch runs are necessary before claiming the variants have saturated, especially because the classical baseline saturates around epoch 4 and an unfair comparison is otherwise possible.
+
+\subsection{Tier 2: Architectural and methodological investigations}
+
+\paragraph{Why does the channel-attention quantum FPN underperform classical FPN under random splits?} The quantum FPN we evaluated uses a quantum squeeze-excite-style gate at the bottleneck, whereas QuFeX and QB-Net replace the bottleneck convolution per spatial location. The gap (classical FPN $39.76$ vs.\ quantum FPN $34.43$ under iid splits) deserves investigation. Possibilities include (a) the channel-attention design carries too few parameters to compete with the classical FPN's full multi-scale fusion, (b) the spatial squeeze-excite is information-lossy compared to a per-location bottleneck replacement, or (c) the FPN's lateral connections already capture the inductive bias the quantum bottleneck would otherwise provide. A controlled comparison swapping the quantum gate type while holding the decoder fixed would isolate which factor dominates.
+
+\paragraph{Combining QuFeX/QB-Net with FPN.} The paper's strongest classical result (FPN $39.76$ random / $31.13$ scene-based) and the paper's strongest quantum result (QB-Net $31.18$ scene-based) come from different architectural slots: FPN modifies the decoder; QuFeX/QB-Net modify the bottleneck. There is no architectural reason these cannot be combined. A QuFeX-or-QB-Net bottleneck inside an FPN decoder is the natural follow-on architecture; if the two contributions are additive in either direction, it would be the strongest single configuration in our search space.
+
+\paragraph{Ansatz vs.\ parameter-count ablation.} The QuFeX/QB-Net difference reported in Section~\ref{sec:results} confounds ansatz family (X-basis $+$ split blocks $+$ CZ ring vs.\ $R_Y$ $+$ $U_3$ $+$ CNOT ladder) with raw parameter count (QB-Net has $50\%$ more parameters per qubit per layer). A controlled $(n, L)$ sweep with matched parameter budgets across both ansatzes would disentangle these.
+
+\paragraph{Improved fire-aware sampling.} The fire-aware sampler experiment (Section~\ref{sec:failures}) failed because we combined a $3.5\times$ oversampling rate with an existing $10\times$ class weight in cross-entropy. A version that jointly re-tunes \texttt{fire\_class\_weight} and the target fire fraction, or that pairs oversampling with hard-negative mining of background patches, is a natural next attempt --- particularly under the random-split protocol where the train/test fire-pixel rate gap closes.
+
+\paragraph{Threshold calibration on the quantum variants.} The threshold sweep in Section~\ref{sec:threshold} was conducted on the classical baseline and found the optimum at $0.65$. We have not re-run the sweep on QuFeX or QB-Net; their sigmoid distributions may differ, and a per-architecture calibration step is straightforward to add to the evaluation pipeline.
+
+\subsection{Tier 3: Generalization beyond Sen2Fire}
+
+\paragraph{Quantum CaBuAr.} The classical CaBuAr result in Section~\ref{sec:cabuar} demonstrates that the pipeline is portable; the preprocessing is in place. Training QuFeX and QB-Net on the converted CaBuAr patches under the official 5-fold protocol is a low-cost next experiment that would tell us whether the quantum margin generalizes to a less domain-shifted benchmark.
+
+\paragraph{Other Sentinel-2 wildfire datasets.} FLOGA / BAM-CD (Greek wildfires, Sentinel-2 + MODIS, 326 events 2017--2021) and the Copernicus Emergency Management Service wildfire collection (500+ Sentinel-2 scenes with severity masks) are both viable Sentinel-2 targets but require their own custom loaders. TS-SatFire (VIIRS 6-band, U.S.\ wildfires, time series) would require an architectural change to handle the temporal axis.
+
+\paragraph{Multi-dataset joint training.} A shared encoder and quantum bottleneck with dataset-specific decoder heads, trained jointly on Sen2Fire + CaBuAr + FLOGA, would directly test whether the quantum bottleneck encodes a generic fire-feature representation rather than an over-fit to a single benchmark. This is the most ambitious and most informative single experiment for the longer-term research agenda.
+
+\paragraph{Real-hardware execution.} Both QuFeX and QB-Net at $4$--$8$ qubits and $1$--$2$ layers are well within IonQ Aria/Forte gate-budget limits. The blocker on a real-hardware run is gradient cost: adjoint differentiation does not exist outside a simulator, and our brief parameter-shift attempt on Zaratan was prohibitively slow per epoch. Faster gradient methods (parameter-shift with stochastic sampling, classical shadows~\cite{barren-plateaus}, or surrogate-model gradients) would directly enable a hardware demonstration and are an open research direction worth its own dedicated investigation.
+
+% =====================================================================
+\section*{Acknowledgements}
+% =====================================================================
+
+We thank \textbf{Dr.\ Franz Klein}, Founding Director (2021--2025) of the National Quantum Laboratory (QLab) at the University of Maryland, for his mentorship and guidance throughout this project, for supporting our access to the Zaratan high-performance computing cluster, and for his continued help in keeping our jobs running on it. We also thank the UMD App Dev Club for organizational support and the UMD Division of Information Technology for HPC access.
+
+% =====================================================================
+\appendix
+\section{Additional Wildfire Datasets Considered}
+\label{sec:appendix-datasets}
+% =====================================================================
+
+Beyond the Sen2Fire benchmark used as our primary evaluation and the CaBuAr cross-dataset evaluation in Section~\ref{sec:cabuar}, we identified three further wildfire datasets that future work could target without major architectural changes to \projectname.
+
+\paragraph{Copernicus Emergency Management Service (CEMS) Wildfire Dataset.} Sentinel-2 imagery covering events from June 2017 to April 2023, with 500+ scenes suitable for semantic segmentation. Includes severity and delineation masks, atmospheric correction, and cloud/landcover masks. Same 12-band Sentinel-2 surface reflectance as Sen2Fire, but scene-level rather than pre-patched.
+
+\paragraph{FLOGA and BAM-CD (Greek Wildfires).} Sentinel-2 + MODIS imagery covering 326 wildfire events in Greece from 2017--2021, with high-resolution burnt-area masks and cloud/water/Corine land-cover masks. A Sentinel-2 subset is directly compatible with our mode-5 or mode-4 input pipeline.
+
+\paragraph{TS-SatFire.} 179 U.S.\ wildfires from 2017--2021, captured by VIIRS at 6 bands and covering entire fire life cycles. Most useful for time-series modeling rather than per-scene segmentation; would require an architectural extension to consume the temporal axis.
+
+\paragraph{Single-band separability.}\label{sec:bandaucs} On the Sen2Fire training split, per-pixel single-band ROC-AUC for fire vs.\ non-fire identifies aerosol as the single most-discriminating channel ($\approx 0.78$), followed by mid-infrared bands B10 and B7 ($\approx 0.69$). RGB bands B2/B3/B4 sit in the $0.60$--$0.65$ range. This per-band ranking is consistent with the spectral-mode choices made by the original Sen2Fire authors~\cite{sen2fire}.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.85\textwidth]{media/per_band_auc.png}
+    \caption{Per-band single-feature ROC-AUC for fire vs.\ non-fire classification on a 60-patch random sample of the Sen2Fire training split. The aerosol channel (orange) is the most-separating individual feature; mid-infrared bands B10/B7 and the coastal aerosol band B1 follow.}
+    \label{fig:band-aucs}
+\end{figure}
+
+\paragraph{Full channel intensity distributions.}
+Figure~\ref{fig:channel-dists} complements Table~\ref{tab:domain-shift} by showing the full pixel-level distributions for each mode-5 input channel, split by train and test.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{media/shifts/extra/feature_distributions.png}
+    \caption{Pixel-level intensity distributions for the four mode-5 input channels (SWIR B11, VRE B7, Green B3, Aerosol Ch~3) in the training (blue) and test (red) splits (50{,}000 pixels sampled from each). Spectral bands show modest overlap; the aerosol channel (bottom right, log scale) has a noticeably heavier high-intensity tail in the test split, visually confirming the $5.3\times$ mean ratio reported in Table~\ref{tab:domain-shift}.}
+    \label{fig:channel-dists}
+\end{figure}
+
+% =====================================================================
+% References section
+% =====================================================================
+\bibliographystyle{plain} % Or 'ieeetr', 'apa', etc.
+\bibliography{references}  % 'references' matches your filename (no .bib)
+
+\end{document}

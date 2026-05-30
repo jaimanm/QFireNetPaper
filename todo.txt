@@ -1,0 +1,32 @@
+## Session Summary
+
+### Changes made to `main.tex` (with rationale)
+
+1. **Abstract — dropped "compact":** Removed the word "compact" from "identical compact U-Net encoder/decoder," because the recovered configs and model code show the quantum runs used the full base-64 backbone, not the compact base-48 one.
+
+2. **Related Work — data re-uploading reattributed:** Reworded so re-uploading is credited as *our* addition rather than inherited from the cited designs, because the original QuFeX paper encodes the input only once (verified against the paper); also fixed "compact"→"full-width" here.
+
+3. **Hybrid-wrapper paragraph — backbone label:** Changed "C=512 for the compact U-Net backbone" to the full-width base-64 backbone, since C=512 is precisely the base-64 bottleneck value (compact would be 384), confirming the quantum runs were base-64.
+
+4. **QuFeX-circuit paragraph — re-uploading note:** Added "(which we add to the original QuFeX design)" so the methodology doesn't misattribute re-uploading to QuFeX.
+
+5. **Results intro — lr and backbone corrected:** Replaced the false "all runs use lr 5e-5 / compact base-48" claim with the truth (QuFeX 5e-5; QB-Net and classical 1e-4; all base-64), because the per-run `config.yaml` files and `qufex.yaml`/`qbnet.yaml` directly contradicted the original sentence.
+
+6 & 7. **Matched-baseline Fire IoU 15.94 → 16.76 (Table 1a + CaBuAr table):** Corrected in both places because the actual `Testing` log line and Kyon's summary slide both report 16.76, not 15.94.
+
+8. **Table 1b — `qufex_0408_2317` IoU 18.42 → 15.89:** Fixed a copy-paste error (18.42 was duplicated from the row above); the run's log says 15.89.
+
+9. **Table 1b — `qufex_0405_0246` 8/1 → 8/2:** Corrected the layer count to match both the config (8 qubits, 2 layers) and the paper's own prose, which already called it "8-qubit, 2-layer."
+
+10 & 11. **Quantum FPN 34.43 flagged provisional:** Added a `‡` footnote because the only recovered quantum-FPN run for that config collapsed to Fire F1 = 0, so 34.43 can't currently be reproduced from recovered artifacts.
+
+### Left to do / decide
+
+- **CaBuAr Fire IoU (48.73 vs 49.73):** Not edited — the test-log line says 49.73 but Chetan's table says 48.73; **need Chetan's raw `/experiments` run** to confirm which is correct.
+- **Abstract's "quantum FPN underperforms by 5 points":** Not edited — it depends on the now-provisional 34.43; decide whether to soften it (no new data needed, just your call).
+- **Loss-ablation, threshold-sweep, and fire-aware-sampler tables:** Real (they match the Progress Tracker exactly) but unverifiable from raw data — **need Varun's (loss), Vardhan's (threshold), and Chetan's (sampler + CaBuAr) `/experiments` folders** to back them with recoverable runs.
+- **QB-Net circuit description:** Code and paper agree (RY + U3 + CNOT ladder), but the team's own slide once described HiQC as amplitude-encoding — **need the paywalled HiQC PDF** to confirm the paper faithfully represents the original QB-Net.
+- **Optional rigor items the paper itself flags:** multi-seed variance and QuFeX/QB-Net under random splits — these are unrun experiments, not data we're missing.
+
+### Bottom line
+The quantum, classical, FPN, and domain-shift results are solidly backed by the three recovered folders (Aidan/Kyon/Farhan); I corrected four genuine numeric typos and three methodology misstatements (lr, backbone width, re-uploading attribution), and flagged one contradicted result (Quantum FPN). Full closure requires the **Varun, Vardhan, and Chetan** data folders plus a decision on the CaBuAr IoU and the abstract wording.
