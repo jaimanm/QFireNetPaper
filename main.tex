@@ -114,17 +114,17 @@ The basis of our automated detection system is a U-Net architecture designed to 
 
 \begin{table}[ht]
     \centering
-    \begin{tabular}{lccc}
+    \begin{tabular}{lcccc}
         \toprule
-        Variant & Base channels & Total parameters & Checkpoint (fp32) \\
+        Variant & Base channels & Total parameters & Checkpoint (fp32) & Test Fire $F_1$ \\
         \midrule
-        Baseline U-Net (Xu et al.~\cite{sen2fire}) & 64 & 17.27\,M & 69.07\,MB \\
-        \textbf{Compact U-Net (ours)}              & 48 & \textbf{9.72\,M} & \textbf{38.86\,MB} \\
+        Baseline U-Net (Xu et al.~\cite{sen2fire}) & 64 & 17.27\,M & 69.07\,MB & 28.71 \\
+        \textbf{Compact U-Net (ours)}              & 48 & \textbf{9.72\,M} & \textbf{38.86\,MB} & 28.34 \\
         \midrule
-        Parameter reduction                        & ---  & $-43.73\%$ & $-43.74\%$ \\
+        Parameter reduction                        & ---  & $-43.73\%$ & $-43.74\%$ & --- \\
         \bottomrule
     \end{tabular}
-    \caption{Parameter and memory  comparison between the original U-Net and our width-reduced compact variant. Full evaluation metrics for these models can be found in Table~\ref{tab:classical-runs}.}
+    \caption{Parameter and memory footprint comparison between the original Sen2Fire baseline U-Net and our width-reduced compact variant. Full evaluation metrics for these models can be found in Table~\ref{tab:classical-runs}.}
     \label{tab:param-counts}
 \end{table}
 
