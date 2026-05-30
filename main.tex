@@ -110,7 +110,7 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
 \subsection{Classical U-Net Architecture and Optimization}
 \label{sec:compactunet}
 
-The basis of our automated detection system is a U-Net architecture designed to perform pixel-level semantic segmentation on 512$\times$512 pixel image patches. The standard U-Net features a symmetric ``encoder-decoder'' structure, where the encoder progressively downsamples the image to extract hierarchical features, and the decoder upsamples it using skip connections to preserve fine spatial details that are critical for identifying small fire fronts. To improve computational efficiency, we reduced the model's internal width. By decreasing the base channel dimensions from $64 \rightarrow 128 \rightarrow 256 \rightarrow 512 \rightarrow 1024$ down to $48 \rightarrow 96 \rightarrow 192 \rightarrow 384 \rightarrow 768$, we achieved a 43.73\% reduction in parameters, shrinking the model from 17.27 million to 9.72 million parameters. This optimization significantly reduced the model's memory footprint from 69.07 MB to 38.86 MB while preserving reasonable accuracy on a preliminary local sanity check (Table~\ref{tab:prelim-accuracy}). This confirmed that reducing the U-Net width yields the most substantial parameter savings, whereas input channels are not the primary bottleneck.
+The basis of our automated detection system is a U-Net architecture designed to perform pixel-level semantic segmentation on 512$\times$512 pixel image patches. The standard U-Net features a symmetric ``encoder-decoder'' structure, where the encoder progressively downsamples the image to extract hierarchical features, and the decoder upsamples it using skip connections to preserve fine spatial details that are critical for identifying small fire fronts. To improve computational efficiency, we reduced the model's internal width. As detailed in Table~\ref{tab:param-counts}, decreasing the base channel dimensions from $64 \rightarrow 128 \rightarrow 256 \rightarrow 512 \rightarrow 1024$ down to $48 \rightarrow 96 \rightarrow 192 \rightarrow 384 \rightarrow 768$, resulted in a noticeable reduction in parameter count and memory footprint while preserving reasonable accuracy on a preliminary local sanity check (Table~\ref{tab:prelim-accuracy}).
 
 \begin{table}[ht]
     \centering
@@ -124,7 +124,7 @@ The basis of our automated detection system is a U-Net architecture designed to 
         Parameter reduction                        & ---  & $-43.73\%$ & $-43.74\%$ \\
         \bottomrule
     \end{tabular}
-    \caption{Parameter footprint of the original Sen2Fire baseline U-Net and our width-reduced compact variant. Reducing the encoder/decoder width from $64{\to}1024$ to $48{\to}768$ removes $\approx 7.55$\,M parameters. A preliminary balanced local sanity check (Table~\ref{tab:prelim-accuracy}) indicates the width reduction does not catastrophically degrade accuracy; a matched-epoch full train/validation/test run (Table~\ref{tab:classical-runs}) confirms the gap is small (Fire $F_1$ $28.34$ vs.\ $28.71$ for the base-64 matched baseline).}
+    \caption{Parameter and memory  comparison between the original U-Net and our width-reduced compact variant. Full evaluation metrics for these models can be found in Table~\ref{tab:classical-runs}.}
     \label{tab:param-counts}
 \end{table}
 
