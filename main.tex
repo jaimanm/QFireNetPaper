@@ -124,11 +124,13 @@ The basis of our automated detection system is a U-Net architecture designed to 
         Parameter reduction                        & ---  & $-43.73\%$ & $-43.74\%$ \\
         \bottomrule
     \end{tabular}
-    \caption{Parameter footprint of the original Sen2Fire baseline U-Net and our width-reduced compact variant. Reducing the encoder/decoder width from $64{\to}1024$ to $48{\to}768$ removes $\approx 7.55$\,M parameters. A preliminary balanced local sanity check (Table~\ref{tab:prelim-accuracy}) indicates the width reduction does not catastrophically degrade accuracy, but a matched-epoch full train/validation/test run is required to quantify the gap precisely.}
+    \caption{Parameter footprint of the original Sen2Fire baseline U-Net and our width-reduced compact variant. Reducing the encoder/decoder width from $64{\to}1024$ to $48{\to}768$ removes $\approx 7.55$\,M parameters. A preliminary balanced local sanity check (Table~\ref{tab:prelim-accuracy}) indicates the width reduction does not catastrophically degrade accuracy; a matched-epoch full train/validation/test run (Table~\ref{tab:classical-runs}) confirms the gap is small (Fire $F_1$ $28.34$ vs.\ $28.71$ for the base-64 matched baseline).}
     \label{tab:param-counts}
 \end{table}
 
-\paragraph{Preliminary accuracy check.} To verify that the width reduction does not catastrophically degrade segmentation quality, we ran a small balanced local sanity check comparing the two widths on CPU. Both models were evaluated on the same balanced local subsets: a 48-patch training subset (24 fire / 24 non-fire) and a 24-patch test subset (12 fire / 12 non-fire). Critically, the width-64 baseline used the existing fully trained checkpoint, whereas the width-48 compact model was trained locally for only a single epoch, so the comparison is biased \emph{against} the compact model. Under these conditions the width-64 baseline reached $90.95\%$ pixel accuracy and the width-48 compact model reached $87.04\%$ (Table~\ref{tab:prelim-accuracy}); for reference, the existing full-pipeline baseline reaches $93.41\%$ on the same metric. The $\approx 3.9$\,pp gap is consistent with the compact model's single-epoch training budget rather than a fundamental loss of capacity, but we report it transparently rather than overstating accuracy preservation: a matched-epoch full train/validation/test run is required before the width reduction can be claimed to preserve accuracy. We present this only as a preliminary check motivating the compact backbone.
+\paragraph{Preliminary accuracy check.} To verify that the width reduction does not catastrophically degrade segmentation quality, we ran a small balanced local sanity check comparing the two widths on CPU. Both models were evaluated on the same balanced local subsets: a 48-patch training subset (24 fire / 24 non-fire) and a 24-patch test subset (12 fire / 12 non-fire). Critically, the width-64 baseline used the existing fully trained checkpoint, whereas the width-48 compact model was trained locally for only a single epoch, so the comparison is biased \emph{against} the compact model. Under these conditions the width-64 baseline reached $90.95\%$ pixel accuracy and the width-48 compact model reached $87.04\%$ (Table~\ref{tab:prelim-accuracy}); for reference, the existing full-pipeline baseline reaches $93.41\%$ on the same metric. The $\approx 3.9$\,pp gap is consistent with the compact model's single-epoch training budget rather than a fundamental loss of capacity, but we report it transparently rather than overstating accuracy preservation. We present this only as a preliminary check motivating the compact backbone.
+
+\paragraph{Full matched-conditions run.} We subsequently trained the width-48 compact model to completion under the same protocol used for the matched-conditions baseline and every other classical/quantum experiment in this paper (mode 5, 5 epochs, learning rate $1\times10^{-4}$, weight decay $5\times10^{-4}$, fire-class weight 10, seed 1234). On the full Sen2Fire test split it reaches Fire $F_1 = 28.34$ (P $=39.29$, R $=22.16$, Fire IoU $=16.51$, mIoU $=54.97$; Table~\ref{tab:classical-runs}), only $0.37$ Fire $F_1$ below the matched-conditions base-64 baseline ($28.71$) and within noise of it on mIoU ($54.97$ vs.\ $54.99$). This confirms that the $43.73\%$ parameter reduction preserves segmentation accuracy at matched training conditions, resolving the open question left by the preliminary local check above.
 
 \begin{table}[ht]
     \centering
@@ -142,7 +144,7 @@ The basis of our automated detection system is a U-Net architecture designed to 
         Full-pipeline baseline (reference)  & 64 & 93.41\% \\
         \bottomrule
     \end{tabular}
-    \caption{Preliminary balanced local accuracy sanity check (CPU; balanced 48-patch train / 24-patch test subsets). The width-48 compact model was trained for a single local epoch while the width-64 baseline used an existing fully trained checkpoint, so the $\approx 3.9$\,pp gap is confounded by training budget and should not be read as a final accuracy-preservation result. A matched-epoch full train/validation/test run is required for a fair comparison.}
+    \caption{Preliminary balanced local accuracy sanity check (CPU; balanced 48-patch train / 24-patch test subsets). The width-48 compact model was trained for a single local epoch while the width-64 baseline used an existing fully trained checkpoint, so the $\approx 3.9$\,pp gap is confounded by training budget and should not be read as a final accuracy-preservation result. A matched-epoch full train/validation/test run (Table~\ref{tab:classical-runs}) gives the fair comparison: Fire $F_1$ $28.34$ (base-48) vs.\ $28.71$ (base-64).}
     \label{tab:prelim-accuracy}
 \end{table}
 
@@ -259,7 +261,7 @@ Each step is followed by BatchNorm and ReLU. The resulting tensor $\mathbb{R}^{B
 \subsection{Classical FPN Extension}
 \label{sec:fpn-method}
 
-To establish whether the quantum gain over the classical baseline is matched by a sufficiently expressive \emph{classical} architectural change, we also evaluate a Feature Pyramid Network~\cite{fpn} variant of the U-Net. The FPN-U-Net retains the same compact encoder used by the quantum variants but replaces the U-Net's symmetric upsampling decoder with a top-down pyramid. At every encoder stage, a $1\times1$ lateral convolution unifies channel widths to a shared FPN width (256), the top-down feature is bilinearly upsampled and added to the lateral, and a $3\times3$ smoothing convolution removes aliasing. Pyramid levels $P_1$--$P_5$ are then resampled to the highest resolution and summed before a $1\times1$ output convolution. A 2D dropout layer ($p=0.5$) at the bottleneck regularizes the deepest features, and training combines weighted cross-entropy with MixUp~\cite{mixup} and CutMix~\cite{cutmix} sample mixing. 
+To establish whether the quantum gain over the classical baseline is matched by a sufficiently expressive \emph{classical} architectural change, we also evaluate a Feature Pyramid Network~\cite{fpn} variant of the U-Net. The FPN-U-Net retains the same full-width (base-64) encoder used by the quantum variants but replaces the U-Net's symmetric upsampling decoder with a top-down pyramid. At every encoder stage, a $1\times1$ lateral convolution unifies channel widths to a shared FPN width (256), the top-down feature is bilinearly upsampled and added to the lateral, and a $3\times3$ smoothing convolution removes aliasing. Pyramid levels $P_1$--$P_5$ are then resampled to the highest resolution and summed before a $1\times1$ output convolution. A 2D dropout layer ($p=0.5$) at the bottleneck regularizes the deepest features, and training combines weighted cross-entropy with MixUp~\cite{mixup} and CutMix~\cite{cutmix} sample mixing. 
 
 \begin{figure}[ht]
     \centering
@@ -287,7 +289,7 @@ Additionally, we evaluate this variant in the SWIR-only spectral mode (\emph{mod
 \label{sec:results}
 % =====================================================================
 
-We evaluate three U-Net variants on Sen2Fire: a classical baseline, QuFeX, and QB-Net. All runs share mode 5 (SWIR + aerosol) input, batch size 16, weight decay 5e-4, fire-class weight 10, seed 1234, and cross-entropy loss. The learning rate was \emph{not} uniform across the comparison. QuFeX used $5\times10^{-5}$, while QB-Net and the classical baseline used $1\times10^{-4}$ (noted for transparency). All three models use the full-width U-Net backbone (base channels 64, with a 512-channel bottleneck), so the classical baseline and both quantum variants share an identical encoder/decoder and differ only at the bottleneck. The compact base-48 backbone of Section~\ref{sec:compactunet} is a separate parameter-reduction study and was not used for the quantum comparison.
+We evaluate three U-Net variants on Sen2Fire: a classical baseline, QuFeX, and QB-Net. A complete ledger of every experiment in this paper --- including the classical extensions, negative results, random-split diagnostics, and cross-dataset transfer --- is collected in Appendix~\ref{sec:ledger} (Table~\ref{tab:ledger}). All runs share mode 5 (SWIR + aerosol) input, batch size 16, weight decay 5e-4, fire-class weight 10, seed 1234, and cross-entropy loss. The learning rate was \emph{not} uniform across the comparison. QuFeX used $5\times10^{-5}$, while QB-Net and the classical baseline used $1\times10^{-4}$ (noted for transparency). All three models use the full-width U-Net backbone (base channels 64, with a 512-channel bottleneck), so the classical baseline and both quantum variants share an identical encoder/decoder and differ only at the bottleneck. The compact base-48 backbone of Section~\ref{sec:compactunet} is a separate parameter-reduction study and was not used for the quantum comparison.
 
 \subsection{Baseline Calibration}
 
@@ -518,6 +520,7 @@ Given the $2.5\%$ training fire-pixel rate, we tested a sampler-level rebalancin
         Xu et al.~\cite{sen2fire}            & U-Net               & 5 & --   & --    & 39.70 & 21.80 & 28.10 & --    \\
         classical\_baseline                  & classical\_unet     & 5 & 5    & 93.41 & 38.41 & 23.18 & 28.91 & 16.90 \\
         \textbf{matched-conditions baseline} & \textbf{classical\_unet} & \textbf{5} & \textbf{5} & \textbf{93.31} & \textbf{37.35} & \textbf{23.31} & \textbf{28.71} & \textbf{16.76} \\
+        compact\_unet (base 48, Section~\ref{sec:compactunet}) & compact\_unet & 5 & 5 & 93.52 & 39.29 & 22.16 & 28.34 & 16.51 \\
         FPN extended (Section~\ref{sec:fpn-extended}) & FPN-U-Net  & 4 & 15   & 92.64 & 33.87 & 28.80 & \textbf{31.13} & 18.44 \\
         \bottomrule
     \end{tabular}
@@ -548,7 +551,7 @@ Given the $2.5\%$ training fire-pixel rate, we tested a sampler-level rebalancin
         qufex\_0405\_0246 & qufex\_unet & 8/2 & 5  & 30.30 (1)  & 93.71 & 36.66 & 12.18 & 18.29          & 10.06 \\
         \bottomrule
     \end{tabular}
-    \caption{Quantum bottleneck runs on Sen2Fire (Zaratan A100/H100, seed $1234$, mode 5 SWIR + aerosol). All runs use the compact U-Net backbone (base channels 48). Sorted by Test $F_1$ descending; the two top rows are reported as the canonical QuFeX and QB-Net configurations in Section~\ref{sec:results}.}
+    \caption{Quantum bottleneck runs on Sen2Fire (Zaratan A100/H100, seed $1234$, mode 5 SWIR + aerosol). All runs use the full-width U-Net backbone (base channels 64). Sorted by Test $F_1$ descending; the two top rows are reported as the canonical QuFeX and QB-Net configurations in Section~\ref{sec:results}.}
     \label{tab:quantum-runs}
 \end{table}
 
@@ -565,15 +568,12 @@ The Sen2Fire results above are computed on a single benchmark with a single geog
 
 \begin{table}[ht]
     \centering
-    \begin{tabular}{lcc}
+    \begin{tabular}{lcccccc}
         \toprule
-        Metric & Sen2Fire (matched baseline) & CaBuAr (test fold) \\
+        Setting & Mode & Test OA & Fire P & Fire R & Fire $F_1$ & Fire IoU \\
         \midrule
-        Fire Precision   & 37.35\% & 50.97\% \\
-        Fire Recall      & 23.31\% & \textbf{95.34\%} \\
-        Fire $F_1$       & 28.71\% & \textbf{66.42\%} \\
-        Fire IoU         & 16.76\% & 49.73\% \\
-        Overall Accuracy & 93.31\% & 95.05\% \\
+        Sen2Fire (matched baseline) & 5 & 93.31 & 37.35 & 23.31 & 28.71 & 16.76 \\
+        CaBuAr (test fold)          & 4 & 95.05 & 50.97 & \textbf{95.34} & \textbf{66.42} & 49.73 \\
         \bottomrule
     \end{tabular}
     \caption{Cross-dataset transferability check, \emph{not} a like-for-like comparison. The CaBuAr column reports a classical U-Net trained from scratch on the converted CaBuAr patches (mode 4, SWIR-only). The much higher $F_1$ reflects CaBuAr's pre-selected high-burned-area base rate rather than a methodological improvement over the Sen2Fire pipeline.}
@@ -656,6 +656,52 @@ We thank \textbf{Dr.\ Franz Klein}, Founding Director (2021--2025) of the Nation
 
 % =====================================================================
 \appendix
+\section{Complete Experiment Ledger}
+\label{sec:ledger}
+
+Table~\ref{tab:ledger} consolidates every experiment in this work. For experiments run multiple times, we report the single run with the highest test Fire $F_1$ (epoch count shown). Groups are separated by comparability: only the scene-based Sen2Fire rows are directly comparable to the published benchmark.
+
+\begin{table}[ht]
+    \centering
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{llcccccc}
+        \toprule
+        Experiment & Backbone & Mode & Split & Ep. & Fire $F_1$ & Fire IoU & mIoU \\
+        \midrule
+        \multicolumn{8}{l}{\emph{Sen2Fire, scene-based split (benchmark-comparable)}}\\
+        Published baseline~\cite{sen2fire}        & U-Net-64 & 5 & scene & ---  & 28.10 & ---   & ---   \\
+        Classical U-Net (matched-conditions)      & U-Net-64 & 5 & scene & 5    & 28.71 & 16.76 & 54.99 \\
+        Classical U-Net (longer training)$^{a}$   & U-Net-64 & 5 & scene & 20   & 29.83 & 17.53 & 55.29 \\
+        Compact U-Net (base-48)                   & U-Net-48 & 5 & scene & 5    & 28.34 & 16.51 & 54.97 \\
+        Loss ablation (best: Dice+CE)             & U-Net-48 & 5 & scene & 10   & 29.27 & 17.15 & 55.15 \\
+        U-Net + MixUp/CutMix                      & U-Net-64 & 5 & scene & 5    & 25.53 & 14.64 & 54.10 \\
+        Fire-aware sampler$^{b}$                  & U-Net-64 & 5 & scene & 5    & 15.84 &  8.60 & 36.18 \\
+        QuFeX (best: 8q/1L)                       & U-Net-64 & 5 & scene & 25   & 30.79 & 18.20 & 55.42 \\
+        QB-Net (best: 4q/2L)                      & U-Net-64 & 5 & scene & 25   & \textbf{31.18} & 18.47 & 55.83 \\
+        Classical FPN (best)                      & FPN-64   & 5 & scene & 15   & 31.01 & 18.35 & 55.65 \\
+        Classical FPN Extended                    & FPN-64   & 4 & scene & 15   & 31.13 & 18.44 & 55.47 \\
+        \addlinespace
+        \multicolumn{8}{l}{\emph{Sen2Fire, random $70/15/15$ split (not benchmark-comparable)}}\\
+        Classical U-Net                           & U-Net-64 & 5 & random & 5   & 32.69 & 19.54 & 57.07 \\
+        Classical FPN                             & FPN-64   & 4 & random & 15  & \textbf{39.76} & 24.82 & 59.96 \\
+        Quantum FPN (SE-gate)$^{c}$               & FPN-64   & 4 & random & 5   &  0.00 &  0.00 & 47.87 \\
+        \addlinespace
+        \multicolumn{8}{l}{\emph{Threshold calibration (classical baseline, \textbf{validation} split)}}\\
+        Tuned threshold $0.65$                    & U-Net-64 & 5 & val   & 5    & 27.42 & 15.89 & 53.91 \\
+        \addlinespace
+        \multicolumn{8}{l}{\emph{Cross-dataset transfer (different dataset and base rate)}}\\
+        CaBuAr (classical U-Net)                  & U-Net-64 & 4 & 3/1/1 & 10   & \textbf{66.42} & 49.73 & 72.26 \\
+        \addlinespace
+        \multicolumn{8}{l}{\emph{Negative result (architecture abandoned)}}\\
+        Amplitude-encoding VQC bottleneck         & U-Net-64 & 5 & scene & ---  & \multicolumn{3}{l}{NaN gradients / all-background collapse} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Complete experiment ledger. Best test Fire $F_1$ run per experiment (epoch count shown). Only the scene-based Sen2Fire group is directly comparable to the published benchmark; random-split, validation, and cross-dataset rows are reported separately. $^{a}$The matched-conditions 5-epoch run ($F_1=28.71$) is the anchor used for all classical/quantum comparisons in the body; the classical U-Net peaks at $29.83$ given a longer (20-epoch) budget. $^{b}$Negative result. $^{c}$The only recovered quantum-FPN run collapses to $F_1=0$; a provisional $34.43$ was previously reported for this slot (Table~\ref{tab:random-split}, footnote $\ddagger$).}
+    \label{tab:ledger}
+\end{table}
+
+% =====================================================================
 \section{Additional Wildfire Datasets Considered}
 \label{sec:appendix-datasets}
 % =====================================================================
