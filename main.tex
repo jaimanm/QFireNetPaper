@@ -139,7 +139,7 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{media/v2_fig/combined_unet_quantum.png}
+    \includegraphics[width=\textwidth]{media/combined_unet_quantum.png}
     \caption{Overview of the hybrid quantum-classical architecture. The base model is a standard U-Net where the central double-convolution bottleneck is removed. It can be replaced by either the QuFeX module (top right) or the QB-Net module (bottom right). Both modules encode the heavily-compressed spatial features into quantum states, process them through variational layers, and return expectation values that are upsampled by the classical decoder.}
     \label{fig:combined-arch}
 \end{figure}
@@ -224,12 +224,6 @@ We first verify our pipeline reproduces the published Sen2Fire baseline. Xu et a
 
 Both quantum variants exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the ordering is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.95\textwidth]{media/v2_fig/v2_fig_main_results.png}
-    \caption{Fire Precision, Recall, $F_1$, and IoU for the four primary architectures on the Sen2Fire test split. Data from Tables~\ref{tab:classical-runs} and~\ref{tab:quantum-runs}. Both quantum variants exceed the classical matched-conditions baseline on $F_1$ and IoU; the classical FPN (mode~4) reaches a comparable ceiling.}
-    \label{fig:main-results}
-\end{figure}
 
 \subsection{Quantum Model Analysis}
 
@@ -239,7 +233,7 @@ Quantum models are still improving at 25 epochs. Fire F1 for QB-Net 4q/2L progre
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\textwidth]{media/paper/fig2_training_curves.png}
+    \includegraphics[width=0.75\textwidth]{media/training_curves.png}
     \caption{Test Fire $F_1$ vs.\ total epoch budget for QB-Net 4q/2L and QuFeX 8q/1L (each point is a separate run from Table~\ref{tab:quantum-runs}). The classical matched-conditions baseline (dashed) saturates by epoch~5; both quantum variants show no plateau at 25 epochs.}
     \label{fig:training-curves}
 \end{figure}
@@ -250,7 +244,7 @@ The cross-architecture comparison complicates any simple ``more qubits is better
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{media/fig_model_comparison.png}
+    \includegraphics[width=\textwidth]{media/model_comparison.png}
     \caption{Qualitative comparison on the held-out test scene (Scene~4), reconstructed from its overlapping $512\times512$ patches. From left: input RGB composite, ground-truth fire mask, and binary detections (threshold 0.5) for the classical baseline, QuFeX (8q/1L), and QB-Net (4q/2L). The operating-point shift discussed above is visible: QuFeX recovers more fire pixels than the conservative classical baseline (higher recall, with some spurious detections), while QB-Net produces the cleanest map, most closely tracking the ground truth.}
     \label{fig:model-comparison}
 \end{figure}
@@ -277,10 +271,10 @@ The high class imbalance raised the natural question of whether the loss functio
 \end{table}
 
 
-\subsection{Threshold Sweep and Probability Calibration}
+\subsection{Threshold Sweep and Probability Maps}
 \label{sec:threshold}
 
-The classical evaluation pipeline thresholds the post-softmax fire probability at 0.5 by default. Since Fire $F_1$ on Sen2Fire is dominated by the minority class, this default is unlikely to be optimal: a lower threshold trades precision for recall, and a higher threshold does the opposite. We swept the decision threshold from 0.10 to 0.75 on the validation split for the classical baseline (Table~\ref{tab:threshold}). The best validation $F_1$ occurs at 0.65, improving Fire $F_1$ by roughly 1.5 points over the default 0.50, with a noticeable bump in mean IoU. The corresponding continuous probability maps are shown in Section~\ref{sec:probmaps}. The heatmaps make it clear that the default 0.5 boundary cuts through regions of intermediate confidence that a tuned threshold can resolve more cleanly.
+The classical evaluation pipeline thresholds the post-softmax fire probability at 0.5 by default. Since Fire $F_1$ on Sen2Fire is dominated by the minority class, this default is unlikely to be optimal: a lower threshold trades precision for recall, and a higher threshold does the opposite. We swept the decision threshold from 0.10 to 0.75 on the validation split for the classical baseline (Table~\ref{tab:threshold}). The best validation $F_1$ occurs at 0.65, improving Fire $F_1$ by roughly 1.5 points over the default 0.50, with a noticeable bump in mean IoU. The corresponding continuous probability maps are shown in Figure~\ref{fig:probmap} below. The heatmaps make it clear that the default 0.5 boundary cuts through regions of intermediate confidence that a tuned threshold can resolve more cleanly.
 
 \begin{table}[H]
     \centering
@@ -301,23 +295,20 @@ The classical evaluation pipeline thresholds the post-softmax fire probability a
 
 
 
-\subsection{Probability Map Visualization}
-\label{sec:probmaps}
-
-To move beyond binary per-patch evaluation, we extended inference to output continuous per-scene fire probability maps by retaining the raw sigmoid activations prior to thresholding. Figure~\ref{fig:probmap} shows a heatmap, binary prediction mask, and ground truth labels for Scene 1 of Sen2Fire. Fire-positive regions cluster near P(fire) = 1.0, while boundary regions show intermediate confidence; structure that is lost in a hard binary mask. These maps were generated for all four Sen2Fire test scenes and informed the threshold sweep reported in Section~\ref{sec:threshold}, confirming visually what Table~\ref{tab:threshold} shows numerically: the optimal Fire $F_1$ is achieved at a decision boundary above 0.5, not below.
+To move beyond binary per-patch evaluation, we extended inference to output continuous per-scene fire probability maps by retaining the raw sigmoid activations prior to thresholding. Figure~\ref{fig:probmap} shows a heatmap, binary prediction mask, and ground truth labels for Scene 1 of Sen2Fire. Fire-positive regions cluster near P(fire) = 1.0, while boundary regions show intermediate confidence; structure that is lost in a hard binary mask. These maps were generated for all four Sen2Fire test scenes and inform the threshold sweep reported above, confirming visually what Table~\ref{tab:threshold} shows numerically: the optimal Fire $F_1$ is achieved at a decision boundary above 0.5, not below.
 
 \begin{figure}[H]
     \centering
     \begin{subfigure}[t]{0.45\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{media/paper/fig6a_scene1_probmap.png}
+        \includegraphics[width=\textwidth]{media/scene1_probmap.png}
         \caption{Scene 1 fire probability map, P(fire) from 0.0 to 1.0.}
         \label{fig:probmap-left}
     \end{subfigure}
     \hfill
     \begin{subfigure}[t]{0.45\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{media/paper/fig6b_scene1_detection_vs_label.png}
+        \includegraphics[width=\textwidth]{media/scene1_detection_vs_label.png}
         \caption{Binary detection vs.\ ground truth label at the 0.5 threshold.}
         \label{fig:probmap-right}
     \end{subfigure}
@@ -652,7 +643,7 @@ Figure~\ref{fig:channel-dists} complements Table~\ref{tab:domain-shift} by showi
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{media/shifts/extra/feature_distributions.png}
+    \includegraphics[width=\textwidth]{media/feature_distributions.png}
     \caption{Pixel-level intensity distributions for the four mode-5 input channels (SWIR B11, VRE B7, Green B3, Aerosol Ch~3) in the training (blue) and test (red) splits (50{,}000 pixels sampled from each). Spectral bands show modest overlap; the aerosol channel (bottom right, log scale) has a noticeably heavier high-intensity tail in the test split, visually confirming the $5.3\times$ mean ratio reported in Table~\ref{tab:domain-shift}.}
     \label{fig:channel-dists}
 \end{figure}
