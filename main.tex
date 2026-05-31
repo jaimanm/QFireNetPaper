@@ -84,7 +84,7 @@ Even within the deep learning family, however, wildfire detection remains a diff
 \section{Sen2Fire Benchmark Dataset}
 % =====================================================================
 
-We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, a publicly released Sentinel-2 wildfire segmentation dataset covering the 2019--2020 Australian bushfire season. The dataset comprises 2{,}466 image patches of $512\times512$ pixels, partitioned into four contiguous scenes summarized in Table~\ref{tab:scenes}. Each patch carries (i) a 12-band Sentinel-2 multispectral image, (ii) a single-band aerosol layer derived from Sentinel-5P, and (iii) a binary fire mask manually annotated by domain experts using the MOD14A1 V6.1 daily fire product as a reference signal. Adjacent patches within a scene overlap by 128 pixels along both spatial axes, so a single patch is reconstructible into a full scene at inference time without seams.
+We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, a publicly released Sentinel-2 wildfire segmentation dataset covering the 2019--2020 Australian bushfire season. The dataset comprises 2{,}466 image patches of $512\times512$ pixels, partitioned into four contiguous scenes summarized in Table~\ref{tab:scenes}. Each patch carries (i) a 12-band Sentinel-2 multispectral image, (ii) a single-band aerosol layer derived from Sentinel-5P, and (iii) a binary fire mask manually annotated by domain experts using the MOD14A1 V6.1 daily fire product as a reference signal. Adjacent patches within a scene overlap by 128 pixels along both spatial axes, so a set of patches is reconstructible into a full scene at inference time without seams.
 
 \begin{table}[ht]
     \centering
@@ -94,8 +94,8 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
         \midrule
         Scene 1 & Train & $32 \times 27$ & 864 & 2--3\% \\
         Scene 2 & Train & $22 \times 27$ & 594 & 2--3\% \\
-        Scene 3 & Validation & $14 \times 36$ & 504 & varies \\
-        Scene 4 & Test & $21 \times 24$ & 504 & $\approx 5.7$\% \\
+        Scene 3 & Validation & $14 \times 36$ & 504 & $\approx 3.6$\% \\
+        Scene 4 & Test & $21 \times 24$ & 504 & $\approx 5.8$\% \\
         \bottomrule
     \end{tabular}
     \caption{Sen2Fire scene composition and split. The official partition is scene-based: training uses scenes 1 and 2, validation uses scene 3, and testing uses scene 4. Due to the fact that the splits are geographically and temporally distinct, the test set differs substantially from training in aerosol load and fire-pixel density (see Section~\ref{sec:domainshift}).}
@@ -121,7 +121,7 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
     \label{fig:scene-rgb}
 \end{figure}
 
-\paragraph{Channels and spectral modes.} The pixel feature stack at each location is thirteen-dimensional: twelve Sentinel-2 surface reflectance bands plus one Sentinel-5P aerosol channel. Image bands are scaled by a factor of $10{,}000$, and the aerosol channel is divided by its per-dataset maximum ($\approx 7.13$) so that all channels lie within a comparable normalized range. The pipeline supports twelve preset \emph{spectral modes} that select subsets of the 13 channels (all bands, RGB only, SWIR only, NDVI/NBR composites, with or without aerosol, etc.); these are exposed as the \texttt{mode} key in every configuration file. Unless otherwise stated, all experiments in this paper use \emph{mode 5} (SWIR + aerosol, 4 input channels), which the original Sen2Fire paper~\cite{sen2fire} identified as the strongest classical configuration. We also report mode-4 (SWIR-only, 3 input channels) results in Section~\ref{sec:fpn-extended} as a direct response to the train/test domain shift documented in Section~\ref{sec:domainshift}. Several modes are built from \emph{spectral indices} rather than raw bands: the Normalized Burn Ratio, $\mathrm{NBR} = (\mathrm{NIR}-\mathrm{SWIR})/(\mathrm{NIR}+\mathrm{SWIR})$, measures burn severity (values near or below zero flag burned or stressed vegetation), while the Normalized Difference Vegetation Index, $\mathrm{NDVI} = (\mathrm{NIR}-\mathrm{Red})/(\mathrm{NIR}+\mathrm{Red})$, measures vegetation density, so a sharp NDVI drop can indicate recently burnt areas~\cite{sen2fire}.
+\paragraph{Channels and spectral modes.} The pixel feature stack at each location has 13 dimensions: twelve Sentinel-2 surface reflectance bands plus one Sentinel-5P aerosol channel. Image bands are scaled by a factor of $10{,}000$, and the aerosol channel is divided by its maximum ($\approx 7.13$) so that all channels lie within a comparable normalized range. The pipeline supports twelve preset \emph{spectral modes} that select subsets of the 13 channels (all bands, RGB only, SWIR only, NDVI/NBR composites, with or without aerosol, etc.); these are exposed as the \texttt{mode} key in every configuration file. Unless otherwise stated, all experiments in this paper use \emph{mode 5} (SWIR + aerosol, 4 input channels), which the original Sen2Fire paper~\cite{sen2fire} identified as the strongest classical configuration. We also report \emph{mode 4} (SWIR-only, 3 input channels) results in Section~\ref{sec:fpn-extended} as a direct response to the train/test domain shift documented in Section~\ref{sec:domainshift}. Several modes are built from \emph{spectral indices} rather than raw bands: the Normalized Burn Ratio, $\mathrm{NBR} = (\mathrm{NIR}-\mathrm{SWIR})/(\mathrm{NIR}+\mathrm{SWIR})$, measures burn severity (values near or below zero flag burned or stressed vegetation), while the Normalized Difference Vegetation Index, $\mathrm{NDVI} = (\mathrm{NIR}-\mathrm{Red})/(\mathrm{NIR}+\mathrm{Red})$, measures vegetation density, so a sharp drop in NDVI can indicate recently burnt areas~\cite{sen2fire}.
 
 \begin{figure}[ht]
     \centering
@@ -131,13 +131,6 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
 \end{figure}
 
 \paragraph{Class imbalance.} Fire pixels are extremely rare. Across all 2{,}466 patches the average fire-pixel fraction is $\approx 4.6\%$ with high variance: most patches contain no fire pixels at all, and a long tail contains patches with 20--100\% fire coverage. The training split has a per-patch fire mean near 2.5\%; the test scene has $\approx 5.7\%$ (Figure~\ref{fig:class-balance}). This imbalance is the central modeling challenge: a trivial all-non-fire predictor achieves $\approx 94$\% overall accuracy and 0\% Fire $F_1$. We therefore report Fire $F_1$ and Fire IoU as the primary metrics, with overall accuracy included only for compatibility with prior work.
-
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.95\textwidth]{media/class_balance.png}
-    \caption{Per-patch fire-pixel fraction in the training (left) and test (right) splits, computed on a 300-patch random sample. Most patches contain little or no fire; the test scene has a substantially higher mean fire-pixel rate than training.}
-    \label{fig:class-balance}
-\end{figure}
 
 % =====================================================================
 \section{Methodology}
