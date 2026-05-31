@@ -144,7 +144,7 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
     \label{fig:combined-arch}
 \end{figure}
 
-\subsection{Classical U-Net Architecture and Optimization}
+\subsection{Compact U-Net}
 \label{sec:compactunet}
 
 The basis of our automated detection system is a U-Net architecture designed to perform pixel-level semantic segmentation on 512$\times$512 pixel image patches. The standard U-Net features a symmetric ``encoder-decoder'' structure, where the encoder progressively downsamples the image to extract hierarchical features, and the decoder upsamples it using skip connections to preserve fine spatial details that are critical for identifying small fire fronts. To improve computational efficiency, we reduced the model's internal width, decreasing the base channel dimensions from $64 \rightarrow 128 \rightarrow 256 \rightarrow 512 \rightarrow 1024$ down to $48 \rightarrow 96 \rightarrow 192 \rightarrow 384 \rightarrow 768$ (Table~\ref{tab:param-counts}). This compact (base-48) variant substantially reduces the parameter count and memory footprint while preserving test-set Fire $F_1$ under matched conditions (full metrics in Table~\ref{tab:classical-runs}). The savings come almost entirely from the width reduction; the input channel count is not the bottleneck.
@@ -218,16 +218,8 @@ We evaluate three U-Net variants on Sen2Fire: a classical baseline, QuFeX, and Q
 
 \subsection{Baseline Calibration}
 
-We first verify our pipeline reproduces the published Sen2Fire baseline. Xu et al.~\cite{sen2fire} report Fire $P = 39.7$, Fire $R = 21.8$, Fire $F_1 = 28.1$ for the SWIR + aerosol U-Net trained for 5{,}000 iterations. Our classical reproduction reaches Fire $F_1 = 28.91$ under matched data and architecture, within noise of the reference ($\Delta F_1 = +0.81$). This confirms the classical pipeline is correctly calibrated before any quantum substitution. For all subsequent comparisons we use a second classical run trained under exactly the same hyperparameter, epoch, and seed conditions as the quantum experiments (Fire $F_1 = 28.71$, mIoU $= 54.99$). We refer to this as the \emph{matched-conditions baseline}.
+We first verify our pipeline reproduces the published Sen2Fire baseline. Table~\ref{tab:classical-runs} lists results published by Xu et al.~\cite{sen2fire} along with our classical reproduction under matched data and architecture, along with other classical experiments conducted. Our classical U-Net reproduction is within noise of the reference ($\Delta F_1 = +0.81$). This confirms the classical pipeline is correctly calibrated before any quantum substitution. For all subsequent comparisons we use a second classical run trained under exactly the same hyperparameter, epoch, and seed conditions as the quantum experiments (Fire $F_1 = 28.71$, mIoU $= 54.99$). We refer to this as the \emph{matched-conditions baseline}.
 
-\subsection{Main Results on Sen2Fire}
-
-Both quantum variants exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the ordering is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
-
-
-% ---------------------------------------------------------------------
-% Table 1a: Classical baselines + extensions
-% ---------------------------------------------------------------------
 \begin{table}[H]
     \centering
     \small
@@ -240,16 +232,17 @@ Both quantum variants exceed the matched-conditions classical baseline. QuFeX (8
         classical\_baseline                  & classical\_unet     & 5 & 5    & 93.41 & 38.41 & 23.18 & 28.91 & 16.90 \\
         \textbf{matched-conditions baseline} & \textbf{classical\_unet} & \textbf{5} & \textbf{5} & \textbf{93.31} & \textbf{37.35} & \textbf{23.31} & \textbf{28.71} & \textbf{16.76} \\
         compact\_unet (base 48, Section~\ref{sec:compactunet}) & compact\_unet & 5 & 5 & 93.52 & 39.29 & 22.16 & 28.34 & 16.51 \\
-        FPN extended (Section~\ref{sec:fpn-extended}) & FPN-U-Net  & 4 & 15   & 92.64 & 33.87 & 28.80 & \textbf{31.13} & 18.44 \\
+        FPN extended (Section~\ref{sec:fpn-method}) & FPN-U-Net  & 4 & 15   & 92.64 & 33.87 & 28.80 & 31.13 & 18.44 \\
         \bottomrule
     \end{tabular}
     \caption{Classical baselines on Sen2Fire (Zaratan A100/H100, seed $1234$). Bold row is the matched-conditions baseline used for all classical/quantum comparisons in this paper.}
     \label{tab:classical-runs}
 \end{table}
 
-% ---------------------------------------------------------------------
-% Table 1b: Quantum runs
-% ---------------------------------------------------------------------
+\subsection{Main Results on Sen2Fire}
+
+Table~\ref{tab:quantum-runs} Lists the results of experiments conducted with the hybrid-quantum variants, QuFeX and QB-Net. Both models exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the pattern is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
+
 \begin{table}[H]
     \centering
     \small
