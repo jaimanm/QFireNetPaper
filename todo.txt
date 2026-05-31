@@ -8,3 +8,10 @@ Abstract
 4.2 QuFeX Architecture
 4.3 QB-Net Architecture
 4.4 Classical FPN Extension
+4.5 Training Protocol and Evaluation
+5 Results
+5.1 Baseline Calibration
+5.2 Main Results on Sen2Fire
+5.3 Quantum Model Analysis
+5.4 Loss Function Ablation
+5.5 Threshold Sweep and Probability Calibration

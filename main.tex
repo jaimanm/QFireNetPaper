@@ -187,7 +187,7 @@ Each step is followed by BatchNorm and ReLU. The resulting tensor $\mathbb{R}^{B
 
 \paragraph{Introduction.} We further investigated a second quantum bottleneck: QB-Net~\cite{qbnet}, proposed in the HiQC paper by Xu, Zhao \& Li (2025) in \textit{Quantum Machine Intelligence}. QB-Net targets the same architectural slot as QuFeX --- the deepest U-Net bottleneck --- and uses the same hybrid wrapper described in Section~\ref{sec:qufex}. The two designs differ \emph{only in the quantum circuit itself}, which lets us directly attribute any performance difference to the choice of ansatz.
 
-\paragraph{QB-Net circuit.} Input features are encoded using $R_Y$ angle embedding directly onto each qubit. Each variational layer applies a $U_3(\theta, \phi, \lambda)$ gate to every qubit, granting full single-qubit rotational freedom with three trainable parameters per qubit and a single unified weight tensor of shape $(L, n, 3)$. Entanglement is achieved through a nearest-neighbour CNOT ladder in an open chain topology, with no wrap-around connection between the first and last qubit. The circuit outputs Pauli-$Z$ expectation values on every qubit. The total trainable parameter count for this circuit is $3 \cdot n \cdot L$, $50\%$ more than QuFeX at matched $(n, L)$. We evaluated 4-qubit, 2-layer as the primary configuration (matching the ansatz exploration in~\cite{qbnet}), and used it as the canonical QB-Net setup for comparisons in Section~\ref{sec:results}.
+\paragraph{QB-Net circuit.} Input features are encoded using $R_Y$ angle embedding directly onto each qubit. Each variational layer applies a $U_3(\theta, \phi, \lambda)$ gate to every qubit, granting full single-qubit rotational freedom with three trainable parameters per qubit and a single unified weight tensor of shape $(L, n, 3)$. Entanglement is achieved through a nearest-neighbour CNOT ladder in an open chain topology, with no wrap-around connection between the first and last qubit. The circuit outputs Pauli-$Z$ expectation values on every qubit. The total trainable parameter count for this circuit is $3 \cdot n \cdot L$, which is $50\%$ more than QuFeX at matched $(n, L)$. We evaluated 4-qubit, 2-layer as the primary configuration (matching the ansatz exploration in~\cite{qbnet}), and used it as the canonical QB-Net setup for comparisons in Section~\ref{sec:results}.
 
 \subsection{Classical FPN Extension}
 \label{sec:fpn-method}
@@ -209,33 +209,12 @@ All training runs were executed on the University of Maryland's Zaratan high-per
 
 PyTorch was configured with CUDA 12.1 support to ensure compatibility with H100 nodes. For quantum simulation, PennyLane's \texttt{lightning.gpu} backend was used in place of the default CPU simulator, enabling GPU-accelerated circuit evaluation and reducing per-epoch training time for hybrid runs to approximately fifteen minutes. Due to the sequential nature of quantum circuit execution, parameter-shift differentiation incurred significantly higher per-epoch costs and was not used for full training runs. SLURM submission scripts were standardized to support both system module and shared conda environment activation, enabling standardized and reproducible job submissions.
 
-Several training-loop changes meaningfully improved throughput and correctness on the Zaratan cluster. Table~\ref{tab:engineering} summarizes the PyTorch-side optimizations that were applied to every run.
-
-\begin{table}[H]
-    \centering
-    \begin{tabular}{p{0.32\textwidth}p{0.6\textwidth}}
-        \toprule
-        Change & Effect \\
-        \midrule
-        \texttt{cudnn.benchmark = True} & Lets cuDNN auto-select the fastest kernel for the fixed 512$\times$512 input shape (free speedup). \\
-        \texttt{persistent\_workers = True} & DataLoader workers stay alive between epochs instead of respawning, so the next epoch starts loading immediately. \\
-        Removed \texttt{empty\_cache()} from batch loop & Avoids unnecessary CPU--GPU synchronization on every batch; PyTorch manages allocator memory adequately on its own. \\
-        \texttt{zero\_grad(set\_to\_none=True)} & Deallocates gradient tensors instead of zeroing them in place, reducing memory pressure and slightly accelerating the backward pass. \\
-        \texttt{lightning.gpu} vs.\ \texttt{default.qubit} & PennyLane's GPU-backed simulator brings hybrid epoch time from hours (CPU simulator) to roughly fifteen minutes on an H100. \\
-        \bottomrule
-    \end{tabular}
-    \caption{Training-loop and quantum-backend changes applied to all reported runs.}
-    \label{tab:engineering}
-\end{table}
-
-In the course of these changes we caught two real bugs in the original training script that affected reported metrics. First, \texttt{model.eval()} was being called during validation but never reversed, so BatchNorm layers froze on their epoch-1 running statistics for the remainder of training. Restoring \texttt{model.train()} after each validation pass resolved this. Second, the aerosol channel was being divided by an incorrect per-band maximum during normalization, producing a much smaller dynamic range than intended for that band. Fixing both was a prerequisite for fair classical/quantum comparisons.
-
 % =====================================================================
 \section{Results}
 \label{sec:results}
 % =====================================================================
 
-We evaluate three U-Net variants on Sen2Fire: a classical baseline, QuFeX, and QB-Net. A complete ledger of every experiment in this paper --- including the classical extensions, negative results, random-split diagnostics, and cross-dataset transfer --- is collected in Appendix~\ref{sec:ledger} (Table~\ref{tab:ledger}). All runs share mode 5 (SWIR + aerosol) input, batch size 16, weight decay 5e-4, fire-class weight 10, seed 1234, and cross-entropy loss. The learning rate was \emph{not} uniform across the comparison. QuFeX used $5\times10^{-5}$, while QB-Net and the classical baseline used $1\times10^{-4}$ (noted for transparency). All three models use the full-width U-Net backbone (base channels 64, with a 512-channel bottleneck), so the classical baseline and both quantum variants share an identical encoder/decoder and differ only at the bottleneck. The compact base-48 backbone of Section~\ref{sec:compactunet} is a separate parameter-reduction study and was not used for the quantum comparison.
+We evaluate three U-Net variants on Sen2Fire: a classical baseline, QuFeX, and QB-Net. A complete ledger of every experiment in this paper (including the classical extensions, negative results, random-split diagnostics, and cross-dataset transfer) is collected in Appendix~\ref{sec:ledger}. All runs share mode 5 (SWIR + aerosol) input, batch size 16, weight decay 5e-4, fire-class weight 10, seed 1234, and cross-entropy loss. QuFeX was trained with a learning rate of $5\times10^{-5}$, while QB-Net and the classical baseline used $1\times10^{-4}$. All three models use the full-width U-Net backbone (base channels 64, with a 512-channel bottleneck), so the classical baseline and both quantum variants share an identical encoder/decoder and differ only at the bottleneck. The compact base-48 backbone of Section~\ref{sec:compactunet} is a separate parameter-reduction study and was not used for the quantum comparison, however the use of the compact model with the quantum variants is noted as future work in Section~\ref{sec:futurework}.
 
 \subsection{Baseline Calibration}
 
@@ -243,7 +222,7 @@ We first verify our pipeline reproduces the published Sen2Fire baseline. Xu et a
 
 \subsection{Main Results on Sen2Fire}
 
-Both quantum variants modestly exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the ordering is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
+Both quantum variants exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the ordering is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
 
 \begin{figure}[H]
     \centering
@@ -252,9 +231,9 @@ Both quantum variants modestly exceed the matched-conditions classical baseline.
     \label{fig:main-results}
 \end{figure}
 
-\subsection{Behavioral Analysis}
+\subsection{Quantum Model Analysis}
 
-Quantum bottlenecks shift the recall/precision operating point. The matched classical baseline detects fire at P=37.4, R=23.3, while the best QuFeX run reaches P=34.4, R=27.9, trading roughly 3 points of precision for 4.6 points of recall. QB-Net partially recovers precision (P=38.3) while retaining higher recall (R=26.3). Operationally this shift is desirable: missed fires are more costly than false alarms in a wildfire-monitoring context.
+Quantum bottlenecks shift the recall/precision operating point. The matched classical baseline detects fire at $P=37.4, R=23.3$, while the best QuFeX run reaches $P=34.4, R=27.9$, trading roughly 3 points of precision for 4.6 points of recall. QB-Net partially recovers precision while retaining higher recall ($P=38.3, R=26.3$). In a wildfire-monitoring context, missed fires are more costly than false alarms, so this shift is desirable.
 
 Quantum models are still improving at 25 epochs. Fire F1 for QB-Net 4q/2L progresses from 27.5 to 28.3 to 29.2 to 31.2 across 5, 10, 20, and 25 epochs. QuFeX 8q/1L follows a similar curve (24.2, 30.3, 30.8). The classical baseline saturates at 5 epochs (best validation F1 reached at epoch 4). This suggests the quantum bottleneck benefits from extended training and the reported margin understates the true ceiling.
 
@@ -267,7 +246,7 @@ Quantum models are still improving at 25 epochs. Fire F1 for QB-Net 4q/2L progre
 
 Within QuFeX, the 8-qubit, 1-layer configuration outperforms 4-qubit, 2-layer ($F_1 = 30.79$ vs.\ $27.43$ at 25 epochs). This runs counter to the original ansatz exploration in~\cite{qufex}, which favoured deeper, narrower circuits. We do not have a definitive mechanistic explanation. One possibility is that the wider quantum-channel projection exposes more independent measurement outputs for the post-quantum $1\times1$ expansion to combine, while doubling depth without re-encoding the input adds parameters without proportionally increasing the function class the bottleneck can represent.
 
-The cross-architecture comparison complicates any simple ``more qubits is better'' reading. QB-Net at 4 qubits and 2 layers ($F_1 = 31.18$) exceeds QuFeX at 8 qubits and 1 layer ($F_1 = 30.79$), so the ansatz design choice appears to matter more than qubit count alone. QB-Net~\cite{qbnet} applies a symmetric $U_3$ rotation on every qubit followed by a CNOT ladder, while QuFeX~\cite{qufex} splits the qubits into two halves with $U_1$ ($R_X + R_Z$) and $U_2$ ($R_X + R_Y$) blocks entangled by a CZ ring. At matched $(n, L)$, QB-Net also carries roughly $50\%$ more trainable bottleneck parameters than QuFeX (three per qubit per layer compared to two), which may further contribute to the gap. Disentangling ansatz design from raw parameter count would require an explicit ablation we have not yet run.
+The cross-architecture comparison complicates any simple ``more qubits is better'' reading. QB-Net at 4 qubits and 2 layers ($F_1 = 31.18$) exceeds QuFeX at 8 qubits and 1 layer ($F_1 = 30.79$), so the ansatz design choice appears to matter more than qubit count alone. As noted in Section~\ref{sec:qbnet}, at matched $(n, L)$ QB-Net carries roughly $50\%$ more trainable bottleneck parameters than QuFeX, which may further contribute to the gap. Disentangling ansatz design from raw parameter count would require an explicit ablation we have not yet run, however a qualitative comparison between our QuFeX and QB-Net experiments is made in Figure~\ref{fig:model-comparison}.
 
 \begin{figure}[H]
     \centering
@@ -279,7 +258,7 @@ The cross-architecture comparison complicates any simple ``more qubits is better
 \subsection{Loss Function Ablation}
 \label{sec:lossablation}
 
-The high class imbalance raised the natural question of whether the loss function was the limiting factor for classical performance. We evaluated four loss configurations against the classical U-Net (mode 5, base channels 64, 10 epochs, all other hyperparameters held fixed), summarized in Table~\ref{tab:loss-ablation}. Weighted cross-entropy and a Dice/CE fusion perform within noise of each other and outperform every focal-loss variant we tested. Increasing the fire-class weight in focal loss from 10 to 20 made performance slightly worse, suggesting that the existing weighting plus the focal modulation was over-correcting. We concluded that loss-function choice is not the bottleneck on this dataset, and used weighted cross-entropy (\texttt{fire\_class\_weight = 10}) for all subsequent classical and quantum runs.
+The high class imbalance raised the natural question of whether the loss function was the limiting factor for classical performance. We evaluated four loss configurations against the classical U-Net (mode 5, base channels 64, 10 epochs, all other hyperparameters held fixed), summarized in Table~\ref{tab:loss-ablation}. Weighted cross-entropy and a Dice+CE fusion perform within noise of each other and outperform every focal-loss variant we tested. Increasing the fire-class weight in focal loss from 10 to 20 made performance slightly worse, suggesting that the existing weighting plus the focal modulation was over-correcting. We concluded that loss-function choice is not the bottleneck on this dataset, and used weighted cross-entropy (\texttt{fire\_class\_weight = 10}) for all subsequent classical and quantum runs.
 
 \begin{table}[H]
     \centering
@@ -325,7 +304,7 @@ The classical evaluation pipeline thresholds the post-softmax fire probability a
 \subsection{Probability Map Visualization}
 \label{sec:probmaps}
 
-To move beyond binary per-patch evaluation, we extended inference to output continuous per-scene fire probability maps by retaining the raw sigmoid activations prior to thresholding. Figure~\ref{fig:probmap} shows Scene 1: the left image displays P(fire) from 0.0 to 1.0 across the full scene, and the right shows the corresponding binary detection mask against the ground truth label at the default 0.5 threshold. Fire-positive regions cluster near P(fire) = 1.0, while boundary regions show intermediate confidence; structure that is lost in a hard binary mask. These maps were generated for all four Sen2Fire test scenes and informed the threshold sweep reported in Section~\ref{sec:threshold}, confirming visually what Table~\ref{tab:threshold} shows numerically: the optimal Fire $F_1$ is achieved at a decision boundary above 0.5, not below.
+To move beyond binary per-patch evaluation, we extended inference to output continuous per-scene fire probability maps by retaining the raw sigmoid activations prior to thresholding. Figure~\ref{fig:probmap} shows a heatmap, binary prediction mask, and ground truth labels for Scene 1 of Sen2Fire. Fire-positive regions cluster near P(fire) = 1.0, while boundary regions show intermediate confidence; structure that is lost in a hard binary mask. These maps were generated for all four Sen2Fire test scenes and informed the threshold sweep reported in Section~\ref{sec:threshold}, confirming visually what Table~\ref{tab:threshold} shows numerically: the optimal Fire $F_1$ is achieved at a decision boundary above 0.5, not below.
 
 \begin{figure}[H]
     \centering
@@ -342,7 +321,7 @@ To move beyond binary per-patch evaluation, we extended inference to output cont
         \caption{Binary detection vs.\ ground truth label at the 0.5 threshold.}
         \label{fig:probmap-right}
     \end{subfigure}
-    \caption{Scene 1 fire probability map (left) and binary detection vs.\ ground truth label at 0.5 threshold (right). Red regions in the probability map indicate high model confidence (P(fire) $\approx$ 1.0); the detection/label comparison shows the effect of applying the decision boundary.}
+    \caption{Scene 1 fire probability map (left) and binary detection vs.\ ground truth label at 0.5 threshold (right). Bright regions in the probability map indicate high model confidence (P(fire) $\approx$ 1.0); the detection/label comparison shows the effect of applying the decision boundary.}
     \label{fig:probmap}
 \end{figure}
 
