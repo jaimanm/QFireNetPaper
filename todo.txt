@@ -6,3 +6,5 @@ Abstract
 3 Sen2Fire Benchmark Dataset
 4.1 Classical U-Net Architecture and Optimization
 4.2 QuFeX Architecture
+4.3 QB-Net Architecture
+4.4 Classical FPN Extension
