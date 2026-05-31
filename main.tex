@@ -225,6 +225,55 @@ We first verify our pipeline reproduces the published Sen2Fire baseline. Xu et a
 Both quantum variants exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the ordering is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
 
 
+% ---------------------------------------------------------------------
+% Table 1a: Classical baselines + extensions
+% ---------------------------------------------------------------------
+\begin{table}[H]
+    \centering
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{llccccccc}
+        \toprule
+        Run & Model & Mode & Epochs & Test OA & Test P & Test R & Test $F_1$ & Test IoU \\
+        \midrule
+        Xu et al.~\cite{sen2fire}            & U-Net               & 5 & --   & --    & 39.70 & 21.80 & 28.10 & --    \\
+        classical\_baseline                  & classical\_unet     & 5 & 5    & 93.41 & 38.41 & 23.18 & 28.91 & 16.90 \\
+        \textbf{matched-conditions baseline} & \textbf{classical\_unet} & \textbf{5} & \textbf{5} & \textbf{93.31} & \textbf{37.35} & \textbf{23.31} & \textbf{28.71} & \textbf{16.76} \\
+        compact\_unet (base 48, Section~\ref{sec:compactunet}) & compact\_unet & 5 & 5 & 93.52 & 39.29 & 22.16 & 28.34 & 16.51 \\
+        FPN extended (Section~\ref{sec:fpn-extended}) & FPN-U-Net  & 4 & 15   & 92.64 & 33.87 & 28.80 & \textbf{31.13} & 18.44 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Classical baselines on Sen2Fire (Zaratan A100/H100, seed $1234$). Bold row is the matched-conditions baseline used for all classical/quantum comparisons in this paper.}
+    \label{tab:classical-runs}
+\end{table}
+
+% ---------------------------------------------------------------------
+% Table 1b: Quantum runs
+% ---------------------------------------------------------------------
+\begin{table}[H]
+    \centering
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{llcccccccc}
+        \toprule
+        Run & Model & $n$/$L$ & Epochs & Best Val $F_1$ (ep.) & Test OA & Test P & Test R & Test $F_1$ & Test IoU \\
+        \midrule
+        qbnet\_0424\_1853 & qbnet\_unet & 4/2 & 25 & 45.89      & 93.29 & 38.27 & 26.30 & \textbf{31.18} & 18.47 \\
+        qufex\_0426\_1554 & qufex\_unet & 8/1 & 25 & 44.62      & 92.76 & 34.38 & 27.88 & \textbf{30.79} & 18.20 \\
+        qbnet\_0424\_1839 & qbnet\_unet & 4/2 & 5  & 42.71      & 92.97 & 35.87 & 27.46 & 31.11          & 18.42 \\
+        qufex\_0425\_1612 & qufex\_unet & 8/1 & 20 & 43.41 (9)  & 93.14 & 36.68 & 25.78 & 30.28          & 17.84 \\
+        qbnet\_0420\_2328 & qbnet\_unet & 4/2 & 20 & 46.20 (14) & 93.33 & 37.74 & 23.86 & 29.24          & 17.12 \\
+        qbnet\_0420\_2231 & qbnet\_unet & 4/2 & 10 & 45.24 (8)  & 93.27 & 36.81 & 22.94 & 28.26          & 16.46 \\
+        qbnet\_0424\_1826 & qbnet\_unet & 4/2 & 5  & 44.39      & 93.16 & 35.47 & 22.45 & 27.50          & 15.94 \\
+        qufex\_0408\_2317 & qufex\_unet & 4/2 & 25 & 42.28      & 91.00 & 25.67 & 29.45 & 27.43          & 15.89 \\
+        qufex\_0419\_2310 & qufex\_unet & 8/1 & 5  & 41.27 (5)  & 93.53 & 37.43 & 17.91 & 24.23          & 13.78 \\
+        qufex\_0405\_0246 & qufex\_unet & 8/2 & 5  & 30.30 (1)  & 93.71 & 36.66 & 12.18 & 18.29          & 10.06 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Quantum bottleneck runs on Sen2Fire (Zaratan A100/H100, seed $1234$, mode 5 SWIR + aerosol). All runs use the full-width U-Net backbone (base channels 64). Sorted by Test $F_1$ descending; the two top rows are reported as the canonical QuFeX and QB-Net configurations in Section~\ref{sec:results}.}
+    \label{tab:quantum-runs}
+\end{table}
+
 \subsection{Quantum Model Analysis}
 
 Quantum bottlenecks shift the recall/precision operating point. The matched classical baseline detects fire at $P=37.4, R=23.3$, while the best QuFeX run reaches $P=34.4, R=27.9$, trading roughly 3 points of precision for 4.6 points of recall. QB-Net partially recovers precision while retaining higher recall ($P=38.3, R=26.3$). In a wildfire-monitoring context, missed fires are more costly than false alarms, so this shift is desirable.
@@ -420,54 +469,6 @@ Given the $2.5\%$ training fire-pixel rate, we tested a sampler-level rebalancin
     \label{fig:sampler-fail}
 \end{figure}
 
-% ---------------------------------------------------------------------
-% Table 1a: Classical baselines + extensions
-% ---------------------------------------------------------------------
-\begin{table}[H]
-    \centering
-    \small
-    \setlength{\tabcolsep}{4pt}
-    \begin{tabular}{llccccccc}
-        \toprule
-        Run & Model & Mode & Epochs & Test OA & Test P & Test R & Test $F_1$ & Test IoU \\
-        \midrule
-        Xu et al.~\cite{sen2fire}            & U-Net               & 5 & --   & --    & 39.70 & 21.80 & 28.10 & --    \\
-        classical\_baseline                  & classical\_unet     & 5 & 5    & 93.41 & 38.41 & 23.18 & 28.91 & 16.90 \\
-        \textbf{matched-conditions baseline} & \textbf{classical\_unet} & \textbf{5} & \textbf{5} & \textbf{93.31} & \textbf{37.35} & \textbf{23.31} & \textbf{28.71} & \textbf{16.76} \\
-        compact\_unet (base 48, Section~\ref{sec:compactunet}) & compact\_unet & 5 & 5 & 93.52 & 39.29 & 22.16 & 28.34 & 16.51 \\
-        FPN extended (Section~\ref{sec:fpn-extended}) & FPN-U-Net  & 4 & 15   & 92.64 & 33.87 & 28.80 & \textbf{31.13} & 18.44 \\
-        \bottomrule
-    \end{tabular}
-    \caption{Classical baselines on Sen2Fire (Zaratan A100/H100, seed $1234$). Bold row is the matched-conditions baseline used for all classical/quantum comparisons in this paper.}
-    \label{tab:classical-runs}
-\end{table}
-
-% ---------------------------------------------------------------------
-% Table 1b: Quantum runs
-% ---------------------------------------------------------------------
-\begin{table}[H]
-    \centering
-    \small
-    \setlength{\tabcolsep}{4pt}
-    \begin{tabular}{llcccccccc}
-        \toprule
-        Run & Model & $n$/$L$ & Epochs & Best Val $F_1$ (ep.) & Test OA & Test P & Test R & Test $F_1$ & Test IoU \\
-        \midrule
-        qbnet\_0424\_1853 & qbnet\_unet & 4/2 & 25 & 45.89      & 93.29 & 38.27 & 26.30 & \textbf{31.18} & 18.47 \\
-        qufex\_0426\_1554 & qufex\_unet & 8/1 & 25 & 44.62      & 92.76 & 34.38 & 27.88 & \textbf{30.79} & 18.20 \\
-        qbnet\_0424\_1839 & qbnet\_unet & 4/2 & 5  & 42.71      & 92.97 & 35.87 & 27.46 & 31.11          & 18.42 \\
-        qufex\_0425\_1612 & qufex\_unet & 8/1 & 20 & 43.41 (9)  & 93.14 & 36.68 & 25.78 & 30.28          & 17.84 \\
-        qbnet\_0420\_2328 & qbnet\_unet & 4/2 & 20 & 46.20 (14) & 93.33 & 37.74 & 23.86 & 29.24          & 17.12 \\
-        qbnet\_0420\_2231 & qbnet\_unet & 4/2 & 10 & 45.24 (8)  & 93.27 & 36.81 & 22.94 & 28.26          & 16.46 \\
-        qbnet\_0424\_1826 & qbnet\_unet & 4/2 & 5  & 44.39      & 93.16 & 35.47 & 22.45 & 27.50          & 15.94 \\
-        qufex\_0408\_2317 & qufex\_unet & 4/2 & 25 & 42.28      & 91.00 & 25.67 & 29.45 & 27.43          & 15.89 \\
-        qufex\_0419\_2310 & qufex\_unet & 8/1 & 5  & 41.27 (5)  & 93.53 & 37.43 & 17.91 & 24.23          & 13.78 \\
-        qufex\_0405\_0246 & qufex\_unet & 8/2 & 5  & 30.30 (1)  & 93.71 & 36.66 & 12.18 & 18.29          & 10.06 \\
-        \bottomrule
-    \end{tabular}
-    \caption{Quantum bottleneck runs on Sen2Fire (Zaratan A100/H100, seed $1234$, mode 5 SWIR + aerosol). All runs use the full-width U-Net backbone (base channels 64). Sorted by Test $F_1$ descending; the two top rows are reported as the canonical QuFeX and QB-Net configurations in Section~\ref{sec:results}.}
-    \label{tab:quantum-runs}
-\end{table}
 
 % =====================================================================
 \section{Cross-Dataset Transfer: CaBuAr}
