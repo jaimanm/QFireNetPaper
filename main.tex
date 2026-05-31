@@ -349,8 +349,6 @@ Trained in mode 5 (SWIR + aerosol), the FPN variant exhibits the same volatility
 
 Retrained in mode 4 (SWIR, no aerosol) for 15 epochs with a less aggressive MixUp/CutMix schedule, the FPN variant reaches Fire $F_1 = \mathbf{31.13}$ and Fire IoU $= 18.44$ on the test split --- a $\approx 4$ point improvement over the same architecture trained with aerosol, and on par with our best quantum results (QB-Net $31.18$, QuFeX $30.79$). This is, to our knowledge, the strongest classical result on the published Sen2Fire split that we have produced.
 
-We interpret this as direct empirical support for the train/test domain shift being the binding constraint on Sen2Fire performance, rather than the inductive bias of the bottleneck. Two architecturally very different changes --- inserting a quantum circuit at the bottleneck, or replacing the decoder with an FPN and dropping the aerosol channel --- yield comparable test-set gains because both are working around the same fixed-data ceiling.
-
 \begin{table}[H]
     \centering
     \begin{tabular}{lc}
