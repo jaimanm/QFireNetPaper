@@ -470,15 +470,15 @@ Given the $2.5\%$ training fire-pixel rate, we tested a sampler-level rebalancin
 \end{table}
 
 % =====================================================================
-\section{Cross-Dataset Transfer: CaBuAr}
+\section{Cross-Dataset Transfer}
 \label{sec:cabuar}
 % =====================================================================
 
-The Sen2Fire results above are computed on a single benchmark with a single geographic and temporal context (Australian bushfires, 2019--2020). To probe whether \projectname's pipeline generalizes to a different sensor context, we ran the classical U-Net component on the California Burned Areas Dataset (CaBuAr)~\cite{cabuar}. We emphasize that the result below is \emph{not} a direct numerical comparison to our Sen2Fire baseline; CaBuAr has substantially different label statistics (see below) and the two datasets sit on different points of the fire/non-fire base-rate axis. We report CaBuAr to demonstrate that the pipeline is portable and to motivate Future Work on a quantum CaBuAr run.
+The Sen2Fire results above are computed on a single benchmark with a single geographic and temporal context (Australian bushfires, 2019--2020). To probe whether \projectname's pipeline generalizes to a different sensor context, we ran the classical U-Net component on the California Burned Areas Dataset (CaBuAr)~\cite{cabuar}. Although CaBuAr has substantially different label statistics (see below), we report CaBuAr to demonstrate that the pipeline is portable and to motivate Future Work on a quantum CaBuAr run.
 
-\paragraph{Format conversion.} CaBuAr ships as HDF5 with one entry per scene and a 5-fold cross-validation split annotation. Our data loader expects per-patch NPZ files with \texttt{image}, \texttt{label}, and \texttt{aerosol} keys. We wrote a preprocessing script that decodes each HDF5 entry into 512$\times$512 Sentinel-2 patches matching the Sen2Fire format. Because CaBuAr does not include an aerosol channel, the \texttt{aerosol} key is a zero-filled placeholder; we therefore use \emph{mode 4} (SWIR-only) for CaBuAr so the placeholder is never read. The official 5-fold split is mapped to a $3/1/1$ partition: folds 0--2 train (333 patches), fold 3 validation (109 patches), fold 4 test (92 patches).
+\paragraph{Format conversion.} CaBuAr files are formatted as HDF5 with one entry per scene and a 5-fold cross-validation split annotation. Our data loader expects per-patch NPZ files with \texttt{image}, \texttt{label}, and \texttt{aerosol} keys. We wrote a preprocessing script that decodes each HDF5 entry into 512$\times$512 Sentinel-2 patches matching the Sen2Fire format. Because CaBuAr does not include an aerosol channel, the \texttt{aerosol} key is a zero-filled placeholder; we therefore use \emph{mode 4} (SWIR-only) for CaBuAr so the placeholder is never read. The official 5-fold split is mapped to a $3/1/1$ partition: folds 0--2 train (333 patches), fold 3 validation (109 patches), fold 4 test (92 patches).
 
-\paragraph{Result.} The classical U-Net trains on the converted dataset without any architectural change. Table~\ref{tab:cabuar} reports the test-fold metrics alongside the Sen2Fire matched-conditions baseline for reference only. The headline Fire $F_1 = 66.42$ is much higher than on Sen2Fire, but this is largely driven by CaBuAr's substantially higher fire-pixel base rate: the CaBuAr pre-patched archive is biased toward patches that already contain burned area, so the prior is far above the $\approx 6\%$ rate seen on Sen2Fire's test scene. The corresponding precision/recall asymmetry --- high recall, much lower precision (Table~\ref{tab:cabuar}) --- reflects the same effect: with a high prior and weighted cross-entropy, the model predicts fire generously and is rewarded for high recall.
+\paragraph{Result.} Table~\ref{tab:cabuar} reports the test metrics alongside the Sen2Fire matched-conditions baseline for reference only. The headline Fire $F_1 = 66.42$ is much higher than on Sen2Fire, but this is largely driven by CaBuAr's substantially higher fire-pixel base rate: the CaBuAr pre-patched archive is biased toward patches that already contain burned area, so the prior is far above the $\approx 6\%$ rate seen on Sen2Fire's test scene. The corresponding asymmetry between precision and recall reflects the same effect: with a high prior and weighted cross-entropy, the model predicts fire more often and is rewarded for high recall. Overall, the results indicate that the U-Net model structure is transferrable to other wildfire datasets such as CaBuAr.
 
 \begin{table}[H]
     \centering
@@ -490,7 +490,7 @@ The Sen2Fire results above are computed on a single benchmark with a single geog
         CaBuAr (test fold)          & 4 & 95.05 & 50.97 & \textbf{95.34} & \textbf{66.42} & 49.73 \\
         \bottomrule
     \end{tabular}
-    \caption{Cross-dataset transferability check, \emph{not} a like-for-like comparison. The CaBuAr column reports a classical U-Net trained from scratch on the converted CaBuAr patches (mode 4, SWIR-only). The much higher $F_1$ reflects CaBuAr's pre-selected high-burned-area base rate rather than a methodological improvement over the Sen2Fire pipeline.}
+    \caption{The CaBuAr row reports a classical U-Net trained on the converted CaBuAr patches (mode 4, SWIR-only). The much higher $F_1$ reflects CaBuAr's pre-selected high-burned-area base rate, since the classical U-Net pipeline is unchanged from Sen2Fire.}
     \label{tab:cabuar}
 \end{table}
 
