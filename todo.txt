@@ -3,3 +3,6 @@ FINAL:
 Abstract
 1 Introduction
 2 Related Work
+3 Sen2Fire Benchmark Dataset
+4.1 Classical U-Net Architecture and Optimization
+4.2 QuFeX Architecture
