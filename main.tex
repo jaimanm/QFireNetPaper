@@ -378,30 +378,28 @@ A direct consequence of this analysis is that dropping the aerosol channel at tr
 
 The domain-shift analysis in Section~\ref{sec:domainshift} predicts that dropping the aerosol channel should narrow the train/test generalization gap, even though aerosol is the single most-separating band on the training split (per-band fire/non-fire ROC-AUC $\approx 0.78$ for aerosol vs.\ $\le 0.70$ for any spectral band; see Section~\ref{sec:bandaucs} in the appendix). We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
 
-Trained in mode 5 (SWIR + aerosol), the FPN variant exhibits the same volatility as the classical U-Net under domain shift: validation $F_1$ swings as high as $42.7\%$ between epochs while the test $F_1$ recovers only to around $27.9\%$, comparable to the classical baseline. 
+Trained in mode 5 (SWIR + aerosol), the FPN variant exhibits the same volatility as the classical U-Net under domain shift: validation $F_1$ swings significantly across epochs, reaching as high as $42.7\%$, while the test $F_1$ recovers only to around $27.9\%$, comparable to the classical baseline. 
 
 Retrained in mode 4 (SWIR, no aerosol) for 15 epochs with a less aggressive MixUp/CutMix schedule, the FPN variant reaches Fire $F_1 = \mathbf{31.13}$ and Fire IoU $= 18.44$ on the test split --- a $\approx 4$ point improvement over the same architecture trained with aerosol, and on par with our best quantum results (QB-Net $31.18$, QuFeX $30.79$). This is, to our knowledge, the strongest classical result on the published Sen2Fire split that we have produced.
 
 We interpret this as direct empirical support for the train/test domain shift being the binding constraint on Sen2Fire performance, rather than the inductive bias of the bottleneck. Two architecturally very different changes --- inserting a quantum circuit at the bottleneck, or replacing the decoder with an FPN and dropping the aerosol channel --- yield comparable test-set gains because both are working around the same fixed-data ceiling.
 
-\begin{figure}[ht]
+\begin{table}[ht]
     \centering
-    \begin{subfigure}[t]{0.54\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{media/shifts/extra/ablation/f1_ablation_summary.png}
-        \caption{Fire $F_1$ at each build step.}
-        \label{fig:fpn-f1}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.44\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{media/shifts/extra/ablation/precision_recall_tradeoff.png}
-        \caption{Precision/recall shifts.}
-        \label{fig:fpn-pr}
-    \end{subfigure}
+    \begin{tabular}{lc}
+        \toprule
+        Configuration & Test Fire $F_1$ \\
+        \midrule
+        Plain U-Net & 27.75 \\
+        Plain U-Net + MixUp/CutMix & 25.53 \\
+        FPN Decoder (No Augmentation) & 28.11 \\
+        FPN Decoder + MixUp/CutMix & 28.45 \\
+        FPN Extended (Mode-4, Dropout) & \textbf{31.13} \\
+        \bottomrule
+    \end{tabular}
     \caption{FPN component ablation. MixUp/CutMix applied to the plain U-Net \emph{hurts} Fire $F_1$ ($27.75 \to 25.53$) because precision surges while recall collapses; the same augmentations are beneficial inside the FPN decoder ($28.11 \to 28.45$). Dropout at the bottleneck is the single most important FPN ingredient. The mode-4 aerosol-channel removal in FPN Extended is responsible for the final jump to $31.13$.}
-    \label{fig:fpn-ablation}
-\end{figure}
+    \label{tab:fpn-ablation}
+\end{table}
 
 \subsection{Random-Split Sensitivity: A Domain-Shift Diagnostic}
 \label{sec:randomsplit}
