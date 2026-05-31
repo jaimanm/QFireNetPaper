@@ -316,7 +316,7 @@ To move beyond binary per-patch evaluation, we extended inference to output cont
     \label{fig:probmap}
 \end{figure}
 
-\subsection{Train/Test Domain Shift}
+\subsection{Domain Shift and Dataset Sensitivity}
 \label{sec:domainshift}
 
 The Sen2Fire benchmark partitions the dataset by scene. Scenes~1 and~2 form the training set, scene~3 is used for validation, and scene~4 for testing. This scene-based split is the source of an unusually large train/test domain shift that we believe sets the practical ceiling for both classical and quantum performance on this benchmark.
@@ -338,12 +338,7 @@ Quantifying the shift on a representative sample of patches, the aerosol channel
     \label{tab:domain-shift}
 \end{table}
 
-A direct consequence of this analysis is that dropping the aerosol channel at training time (\texttt{mode = 4}, SWIR-only) should narrow the train/test gap. We confirm this empirically in Section~\ref{sec:fpn-extended} below: a classical FPN-augmented variant trained in mode~4 reaches Fire $F_1 = 31.13$, comparable to the best quantum result.
-
-\subsection{Classical Architectural Extensions: FPN and Mode-4}
-\label{sec:fpn-extended}
-
-The domain-shift analysis in Section~\ref{sec:domainshift} predicts that dropping the aerosol channel should narrow the train/test generalization gap, even though aerosol is the single most-separating band on the training split (per-band fire/non-fire ROC-AUC $\approx 0.78$ for aerosol vs.\ $\le 0.70$ for any spectral band; see Section~\ref{sec:bandaucs} in the appendix). We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
+A direct consequence of this analysis is that dropping the aerosol channel at training time (\texttt{mode = 4}, SWIR-only) should narrow the train/test gap, even though aerosol is the single most-separating band on the training split (per-band fire/non-fire ROC-AUC $\approx 0.78$ for aerosol vs.\ $\le 0.70$ for any spectral band; see Section~\ref{sec:bandaucs} in the appendix). We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
 
 Trained in mode 5 (SWIR + aerosol), the FPN variant exhibits the same volatility as the classical U-Net under domain shift: validation $F_1$ swings significantly across epochs, reaching as high as $42.7\%$, while the test $F_1$ recovers only to around $27.9\%$, comparable to the classical baseline. 
 
@@ -366,10 +361,8 @@ Retrained in mode 4 (SWIR, no aerosol) for 15 epochs with a less aggressive MixU
     \label{tab:fpn-ablation}
 \end{table}
 
-\subsection{Random-Split Sensitivity: A Domain-Shift Diagnostic}
-\label{sec:randomsplit}
-
-The mode-4 result in Section~\ref{sec:fpn-extended} mitigates the train/test domain shift indirectly, by removing the most-shifted input channel. A more direct intervention is to remove the scene-based split itself. We re-ran several configurations after pooling all $2{,}466$ patches across the four scenes and re-partitioning them uniformly at random into $70/15/15$ train/validation/test folds, with a fixed RNG seed for the shuffle so the splits are reproducible across runs. The result is unambiguous: under iid splits, classical Fire $F_1$ rises by $4$--$9$ points for both U-Net architectures (Table~\ref{tab:random-split}).
+\paragraph{Random-Split Sensitivity.}
+The mode-4 result above mitigates the train/test domain shift indirectly, by removing the most-shifted input channel. A more direct intervention is to remove the scene-based split itself. We re-ran several configurations after pooling all $2{,}466$ patches across the four scenes and re-partitioning them uniformly at random into $70/15/15$ train/validation/test folds, with a fixed RNG seed for the shuffle so the splits are reproducible across runs. The result is unambiguous: under iid splits, classical Fire $F_1$ rises by $4$--$9$ points for both U-Net architectures (Table~\ref{tab:random-split}).
 
 \begin{table}[H]
     \centering
@@ -389,7 +382,7 @@ The mode-4 result in Section~\ref{sec:fpn-extended} mitigates the train/test dom
     \label{tab:random-split}
 \end{table}
 
-Two things stand out. First, the FPN architecture benefits more from the split change than the vanilla U-Net does ($+8.75$ vs.\ $+3.98$ Fire $F_1$), suggesting that the FPN's multi-scale fusion is particularly hurt by the train/test distribution mismatch in the scene-based split --- consistent with the high val/test gap we observed during FPN training under mode 5 (Section~\ref{sec:fpn-extended}). Second, under the same random-split protocol, the quantum FPN variant falls $5.3$ points \emph{below} the classical FPN (Table~\ref{tab:random-split}). We caution against over-reading this comparison: the quantum FPN uses a small channel-attention quantum gate at the bottleneck rather than the per-spatial-location QuFeX/QB-Net bottleneck inserts that generated the $\approx +2$ quantum margin under the scene-based split (Sections~\ref{sec:qufex}--\ref{sec:qbnet}). The two are different quantum architectural designs and this result does not directly determine whether QuFeX or QB-Net retain their margin once the split-induced ceiling is removed. \textbf{We do not have QuFeX or QB-Net runs under the random-split protocol yet}, and acquiring them is the single most informative remaining experiment in this work (Section~\ref{sec:futurework}).
+Two things stand out. First, the FPN architecture benefits more from the split change than the vanilla U-Net does ($+8.75$ vs.\ $+3.98$ Fire $F_1$), suggesting that the FPN's multi-scale fusion is particularly hurt by the train/test distribution mismatch in the scene-based split --- consistent with the high val/test gap we observed during FPN training under mode 5 above. Second, under the same random-split protocol, the quantum FPN variant falls $5.3$ points \emph{below} the classical FPN (Table~\ref{tab:random-split}). We caution against over-reading this comparison: the quantum FPN uses a small channel-attention quantum gate at the bottleneck rather than the per-spatial-location QuFeX/QB-Net bottleneck inserts that generated the $\approx +2$ quantum margin under the scene-based split (Sections~\ref{sec:qufex}--\ref{sec:qbnet}). The two are different quantum architectural designs and this result does not directly determine whether QuFeX or QB-Net retain their margin once the split-induced ceiling is removed. \textbf{We do not have QuFeX or QB-Net runs under the random-split protocol yet}, and acquiring them is the single most informative remaining experiment in this work (Section~\ref{sec:futurework}).
 
 \subsection{Failure Analysis}
 \label{sec:failures}
