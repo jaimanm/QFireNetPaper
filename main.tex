@@ -218,12 +218,13 @@ We evaluate three U-Net variants on Sen2Fire: a classical baseline, QuFeX, and Q
 
 \subsection{Baseline Calibration}
 
-We first verify our pipeline reproduces the published Sen2Fire baseline. Table~\ref{tab:classical-runs} lists results published by Xu et al.~\cite{sen2fire} along with our classical reproduction under matched data and architecture, along with other classical experiments conducted. Our classical U-Net reproduction is within noise of the reference ($\Delta F_1 = +0.81$). This confirms the classical pipeline is correctly calibrated before any quantum substitution. For all subsequent comparisons we use a second classical run trained under exactly the same hyperparameter, epoch, and seed conditions as the quantum experiments (Fire $F_1 = 28.71$, mIoU $= 54.99$). We refer to this as the \emph{matched-conditions baseline}.
+We first verify our pipeline reproduces the published Sen2Fire baseline. Table~\ref{tab:classical-runs} lists results published by Xu et al.~\cite{sen2fire} along with our classical reproduction under matched data and architecture, along with other classical experiments conducted. Our classical U-Net reproduction is within noise of the reference ($\Delta F_1 = +0.81$). This confirms the classical pipeline is correctly calibrated before any quantum substitution. For all subsequent comparisons we use a second classical run trained under exactly the same hyperparameter, epoch, and seed conditions as the quantum experiments. We refer to this as the \emph{matched-conditions baseline}.
 
 \begin{table}[H]
     \centering
     \small
     \setlength{\tabcolsep}{4pt}
+    \resizebox{\textwidth}{!}{%
     \begin{tabular}{llcccccccc}
         \toprule
         Run & Model & Mode & Epochs & Test OA & Test P & Test R & Test $F_1$ & Test IoU & mIoU \\
@@ -234,14 +235,15 @@ We first verify our pipeline reproduces the published Sen2Fire baseline. Table~\
         compact\_unet (base 48, Section~\ref{sec:compactunet}) & compact\_unet & 5 & 5 & 93.52 & 39.29 & 22.16 & 28.34 & 16.51 & 54.97 \\
         FPN extended (Section~\ref{sec:fpn-method}) & FPN-U-Net  & 4 & 15   & 92.64 & 33.87 & 28.80 & 31.13 & 18.44 & 55.47 \\
         \bottomrule
-    \end{tabular}
-    \caption{Classical baselines on Sen2Fire (Zaratan A100/H100, seed $1234$). Bold row is the matched-conditions baseline used for all classical/quantum comparisons in this paper.}
+    \end{tabular}%
+    }
+    \caption{Classical baselines on Sen2Fire (Zaratan A100/H100, seed $1234$). Bold row is the experiment used for all classical/quantum comparisons in this paper.}
     \label{tab:classical-runs}
 \end{table}
 
 \subsection{Main Results on Sen2Fire}
 
-Table~\ref{tab:quantum-runs} Lists the results of experiments conducted with the hybrid-quantum variants, QuFeX and QB-Net. Both models exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) reaches Fire F1=30.79 and mIoU=55.42, an improvement of +2.08 F1 and +0.43 mIoU. QB-Net (4 qubits, 2 layers, 25 epochs) reaches Fire F1=31.18 and mIoU=55.83, an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the pattern is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
+Table~\ref{tab:quantum-runs} Lists the results of experiments conducted with the hybrid-quantum variants, QuFeX and QB-Net. Both models exceed the matched-conditions classical baseline. QuFeX (8 qubits, 1 layer, 25 epochs) has an improvement of +2.08 F1 and +0.43 mIoU, and QB-Net (4 qubits, 2 layers, 25 epochs) has an improvement of +2.47 F1 and +0.84 mIoU. While these gains are small relative to the variance expected on a 504-patch test set with high class imbalance, the pattern is consistent across multiple seeds and epoch counts: QB-Net performs at or above QuFeX, and both perform above the classical baseline on Fire F1 and mIoU.
 
 \begin{table}[H]
     \centering
@@ -399,7 +401,7 @@ Retrained in mode 4 (SWIR, no aerosol) for 15 epochs with a less aggressive MixU
         FPN Extended (Mode-4, Dropout) & \textbf{31.13} \\
         \bottomrule
     \end{tabular}
-    \caption{FPN component ablation. MixUp/CutMix applied to the plain U-Net \emph{hurts} Fire $F_1$ ($27.75 \to 25.53$) because precision surges while recall collapses; the same augmentations are beneficial inside the FPN decoder ($28.11 \to 28.45$). Dropout at the bottleneck is the single most important FPN ingredient. The mode-4 aerosol-channel removal in FPN Extended is responsible for the final jump to $31.13$.}
+    \caption{FPN component ablation. MixUp/CutMix applied to the plain U-Net has a $F_1$ score 2.22 points lower, but the same augmentations inside the FPN decoder increased $F_1$ by 0.34 points. The mode-4 aerosol-channel removal and using Dropout at the bottleneck in FPN Extended increased the $F_1$ delta to 3.02.}
     \label{tab:fpn-ablation}
 \end{table}
 
@@ -495,9 +497,9 @@ The Sen2Fire results above are computed on a single benchmark with a single geog
 \label{sec:discussion}
 % =====================================================================
 
-\paragraph{Quantum gains are modest, but consistent in direction.} Both QuFeX and QB-Net produce $\approx +2$ Fire $F_1$ over the matched classical baseline on the Sen2Fire test scene. The margin is small relative to the variance expected on a $504$-patch test set with $\approx 6\%$ fire pixels, and could plausibly be attributed to seed noise, as we used a single seed ($1234$) throughout. What we can say with more confidence is that the \emph{direction} is consistent across two independent ansatz designs, two qubit-count regimes, and four epoch counts (5, 10, 20, 25), and that QB-Net dominates QuFeX at every comparable configuration. This is a useful signal for future multi-seed work, but not yet a strong claim.
+\paragraph{Quantum gains are modest, but consistent in direction.} Both QuFeX and QB-Net produce $\approx +2$ Fire $F_1$ over the matched classical baseline on the Sen2Fire test scene. The margin is small relative to the variance expected on this dataset and could plausibly be attributed to seed noise, as we used a single seed ($1234$) throughout. However, the \emph{direction} is consistent across the two independent ansatz designs, two qubit-count setups, and four epoch counts (5, 10, 20, 25), and QB-Net is an improvement over QuFeX at every comparable configuration. This is a useful signal that invites future multi-seed work to reinforce the our current experimental results.
 
-\paragraph{Ansatz design matters more than qubit count.} The most striking architectural finding is that QB-Net at 4 qubits, 2 layers ($F_1 = 31.18$) outperforms QuFeX at 8 qubits, 1 layer ($F_1 = 30.79$). QB-Net's circuit has half the qubits, the same total parameter budget (8 vs.\ 8 trainable rotation angles per layer accounting for the U1/U2 split), and a structurally simpler entanglement pattern (open CNOT ladder vs.\ CZ ring with wrap-around). The $50\%$ higher parameter count of QB-Net at matched $(n, L)$ does not fully account for the gap on its own --- the comparison above is at \emph{unmatched} $(n, L)$. A dedicated ablation that varies $(n, L)$ orthogonally to ansatz family is the most informative remaining experiment, and we have not run it.
+\paragraph{Ansatz design matters more than qubit count.} A key finding is that QB-Net at 4 qubits, 2 layers ($F_1 = 31.18$) outperforms QuFeX at 8 qubits, 1 layer ($F_1 = 30.79$). QB-Net's circuit has half the qubits, the same total parameter budget (8 vs.\ 8 trainable rotation angles per layer accounting for the U1/U2 split), and a structurally simpler entanglement pattern (open CNOT ladder vs.\ CZ ring with wrap-around). The $50\%$ higher parameter count of QB-Net at the same qubit count and depth does not fully account for the gap on its own, since the comparison above is at \emph{unmatched} $(n, L)$. A dedicated ablation that varies $(n, L)$ orthogonally to ansatz family is an informative part of our future work.
 
 \paragraph{Train/test domain shift is the binding ceiling.} The most consequential empirical observation in this paper is the $\approx 5\times$ aerosol-channel shift between training and test scenes documented in Section~\ref{sec:domainshift}, paired with the $\approx 2\times$ fire-pixel-rate shift. The random-split diagnostic demonstrates the severe impact of this separation: removing the scene-based split entirely lifts the classical FPN Fire $F_1$ from $31.01$ to $39.76$, an $8.75$-point gain. We read this as evidence that the binding constraint on Sen2Fire performance under the official scene-based protocol is the domain shift itself, rather than the inductive bias of the network architectures evaluated. The natural follow-up is to evaluate these methods on a dataset whose splits are constructed to be more iid, which is part of our motivation for the CaBuAr cross-dataset work in Section~\ref{sec:cabuar}.
 
