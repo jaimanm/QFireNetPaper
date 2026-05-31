@@ -295,7 +295,7 @@ The classical evaluation pipeline thresholds the post-softmax fire probability a
 
 
 
-To move beyond binary per-patch evaluation, we extended inference to output continuous per-scene fire probability maps by retaining the raw sigmoid activations prior to thresholding. Figure~\ref{fig:probmap} shows a heatmap, binary prediction mask, and ground truth labels for Scene 1 of Sen2Fire. Fire-positive regions cluster near P(fire) = 1.0, while boundary regions show intermediate confidence; structure that is lost in a hard binary mask. These maps were generated for all four Sen2Fire test scenes and inform the threshold sweep reported above, confirming visually what Table~\ref{tab:threshold} shows numerically: the optimal Fire $F_1$ is achieved at a decision boundary above 0.5, not below.
+To move beyond binary per-patch evaluation, we extended inference to output continuous per-scene fire probability maps by retaining the raw sigmoid activations prior to thresholding. Figure~\ref{fig:probmap} shows a heatmap, binary prediction mask, and ground truth labels for Scene 1 of Sen2Fire. Fire-positive regions cluster near P(fire) = 1.0, while boundary regions show intermediate confidence. This reveals structure that is lost in a hard binary mask. Such heatmaps were generated for all four Sen2Fire test scenes and informed the threshold sweep reported above, giving visual confirmation of Table~\ref{tab:threshold}'s numerical results.
 
 \begin{figure}[H]
     \centering
@@ -312,16 +312,16 @@ To move beyond binary per-patch evaluation, we extended inference to output cont
         \caption{Binary detection vs.\ ground truth label at the 0.5 threshold.}
         \label{fig:probmap-right}
     \end{subfigure}
-    \caption{Scene 1 fire probability map (left) and binary detection vs.\ ground truth label at 0.5 threshold (right). Bright regions in the probability map indicate high model confidence (P(fire) $\approx$ 1.0); the detection/label comparison shows the effect of applying the decision boundary.}
+    \caption{Scene 1 fire probability map (left) and binary detection vs.\ ground truth label at 0.5 threshold (right). Bright regions in the probability map indicate high model confidence (P(fire) $\approx$ 1.0)}
     \label{fig:probmap}
 \end{figure}
 
 \subsection{Domain Shift and Dataset Sensitivity}
 \label{sec:domainshift}
 
-The Sen2Fire benchmark partitions the dataset by scene. Scenes~1 and~2 form the training set, scene~3 is used for validation, and scene~4 for testing. This scene-based split is the source of an unusually large train/test domain shift that we believe sets the practical ceiling for both classical and quantum performance on this benchmark.
+The Sen2Fire benchmark partitions the dataset by scene. Scenes~1 and~2 form the training set, scene~3 is used for validation, and scene~4 for testing. This scene-based split is the source of an unusually large train/test domain shift that we believe sets a practical ceiling for both classical and quantum performance on this benchmark.
 
-Quantifying the shift on a representative sample of patches, the aerosol channel mean is approximately $5.3\times$ higher in the test set than in the training set (Table~\ref{tab:domain-shift}). The fire-pixel base rate also more than doubles, from $2.5\%$ in training to $5.7\%$ in test. The cumulative distribution of aerosol intensity in the test split is visibly shifted toward higher values across its full range, consistent with the test scene having been acquired under heavier smoke conditions than the training scenes. We treat this as the dominant explanation for the recurring observation in our experiments that validation Fire $F_1$ is consistently $5$--$13$ points higher than test Fire $F_1$, even for the classical baseline.
+Quantifying the shift on a representative sample of patches, the aerosol channel mean is approximately $5.3\times$ higher in the test set than in the training set (Table~\ref{tab:domain-shift}). The fire-pixel base rate also more than doubles, from $2.5\%$ in training to $5.7\%$ in test. One reason is that the test scene may have been acquired under heavier smoke conditions than the training scenes. We treat this as the dominant explanation for the recurring observation in our experiments that validation Fire $F_1$ is consistently $5$--$13$ points higher than test Fire $F_1$, even for the classical baseline.
 
 \begin{table}[H]
     \centering
@@ -338,11 +338,11 @@ Quantifying the shift on a representative sample of patches, the aerosol channel
     \label{tab:domain-shift}
 \end{table}
 
-A direct consequence of this analysis is that dropping the aerosol channel at training time (\texttt{mode = 4}, SWIR-only) should narrow the train/test gap, even though aerosol is the single most-separating band on the training split (per-band fire/non-fire ROC-AUC $\approx 0.78$ for aerosol vs.\ $\le 0.70$ for any spectral band; see Section~\ref{sec:bandaucs} in the appendix). We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
+A direct consequence of this analysis is that dropping the aerosol channel at training time (\texttt{mode = 4}, SWIR-only) should narrow the train/test gap, even though aerosol is the single most-separating band on the training split (see Appendix~\ref{sec:bandaucs}). We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
 
 Trained in mode 5 (SWIR + aerosol), the FPN variant exhibits the same volatility as the classical U-Net under domain shift: validation $F_1$ swings significantly across epochs, reaching as high as $42.7\%$, while the test $F_1$ recovers only to around $27.9\%$, comparable to the classical baseline. 
 
-Retrained in mode 4 (SWIR, no aerosol) for 15 epochs with a less aggressive MixUp/CutMix schedule, the FPN variant reaches Fire $F_1 = \mathbf{31.13}$ and Fire IoU $= 18.44$ on the test split --- a $\approx 4$ point improvement over the same architecture trained with aerosol, and on par with our best quantum results (QB-Net $31.18$, QuFeX $30.79$). This is, to our knowledge, the strongest classical result on the published Sen2Fire split that we have produced.
+Retrained in mode 4 (SWIR, no aerosol) for 15 epochs with a less aggressive MixUp/CutMix schedule, the FPN variant reaches Fire $F_1 = \mathbf{31.13}$ and Fire IoU $= 18.44$ on the test split. This is a $\approx 4$ point improvement over the same architecture trained with aerosol, and on par with our best quantum results (QB-Net $31.18$, QuFeX $30.79$). This is, to our knowledge, the strongest classical result on the published Sen2Fire split that we have produced.
 
 \begin{table}[H]
     \centering
