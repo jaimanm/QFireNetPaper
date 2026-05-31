@@ -414,6 +414,13 @@ Given the $2.5\%$ training fire-pixel rate, we tested a sampler-level rebalancin
     \label{tab:sampler-fail}
 \end{table}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{media/sampler_map.png}
+    \caption{Visual demonstration of the precision collapse when using the fire-aware sampler. Combining sampler-level oversampling with the existing weighted cross-entropy pushes the model into over-confident fire predictions across most of the background.}
+    \label{fig:sampler-fail}
+\end{figure}
+
 % ---------------------------------------------------------------------
 % Table 1a: Classical baselines + extensions
 % ---------------------------------------------------------------------
