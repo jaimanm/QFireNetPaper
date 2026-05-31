@@ -316,12 +316,12 @@ To move beyond binary per-patch evaluation, we extended inference to output cont
     \label{fig:probmap}
 \end{figure}
 
-\subsection{Domain Shift and Dataset Sensitivity}
+\subsection{Domain Shift}
 \label{sec:domainshift}
 
-The Sen2Fire benchmark partitions the dataset by scene. Scenes~1 and~2 form the training set, scene~3 is used for validation, and scene~4 for testing. This scene-based split is the source of an unusually large train/test domain shift that we believe sets a practical ceiling for both classical and quantum performance on this benchmark.
+The Sen2Fire benchmark partitions the dataset by scene. Scenes~1 and~2 form the training set, scene~3 is used for validation, and scene~4 for testing. This scene-based split is the source of an unusually large train/test domain shift that sets a practical ceiling for both classical and quantum performance on this benchmark.
 
-Quantifying the shift on a representative sample of patches, the aerosol channel mean is approximately $5.3\times$ higher in the test set than in the training set (Table~\ref{tab:domain-shift}). The fire-pixel base rate also more than doubles, from $2.5\%$ in training to $5.7\%$ in test. One reason is that the test scene may have been acquired under heavier smoke conditions than the training scenes. We treat this as the dominant explanation for the recurring observation in our experiments that validation Fire $F_1$ is consistently $5$--$13$ points higher than test Fire $F_1$, even for the classical baseline.
+Quantifying the shift on a representative sample of patches, the aerosol channel mean is approximately $5.3\times$ higher in the test set than in the training set (Table~\ref{tab:domain-shift}). The fire-pixel base rate also more than doubles, from $2.5\%$ in training to $5.7\%$ in test (Table~\ref{tab:scenes}). As a result, the recurring observation in our experiments that validation Fire $F_1$ is consistently $5$--$13$ points higher than test Fire $F_1$, even for the classical baseline.
 
 \begin{table}[H]
     \centering
@@ -338,7 +338,7 @@ Quantifying the shift on a representative sample of patches, the aerosol channel
     \label{tab:domain-shift}
 \end{table}
 
-A direct consequence of this analysis is that dropping the aerosol channel at training time (\texttt{mode = 4}, SWIR-only) should narrow the train/test gap, even though aerosol is the single most-separating band on the training split (see Appendix~\ref{sec:bandaucs}). We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
+Consequently, even though aerosol is the single most-separating band on the training split (see Appendix~\ref{sec:bandaucs}), dropping the aerosol channel at training time should narrow the train/test gap. We test this on the classical FPN variant from Section~\ref{sec:fpn-method}.
 
 Trained in mode 5 (SWIR + aerosol), the FPN variant exhibits the same volatility as the classical U-Net under domain shift: validation $F_1$ swings significantly across epochs, reaching as high as $42.7\%$, while the test $F_1$ recovers only to around $27.9\%$, comparable to the classical baseline. 
 
@@ -378,7 +378,7 @@ The mode-4 result above mitigates the train/test domain shift indirectly, by rem
         Quantum FPN$^{\dagger}$ & 5 & Random      & 95.10 & 40.07 & 30.18 & 34.43$^{\ddagger}$ \\
         \bottomrule
     \end{tabular}
-    \caption{Random-split sensitivity diagnostic. Pooling all 2{,}466 patches and re-partitioning at random into $70/15/15$ folds removes the geographic-and-temporal separation between train and test. The classical FPN gains $+8.75$ Fire $F_1$ from this change alone. \emph{These numbers are not directly comparable to the published Sen2Fire benchmark}, which is defined on the scene-based split; we report them as a controlled diagnostic to isolate the contribution of the split itself. $^{\dagger}$The quantum FPN uses a small quantum channel-attention gate at the bottleneck (squeeze-excite style), architecturally distinct from the QuFeX/QB-Net inserts described in Sections~\ref{sec:qufex} and~\ref{sec:qbnet}. $^{\ddagger}$This value could not be reproduced from recovered training artifacts: the only recovered quantum-FPN run for this configuration collapses to a degenerate all-background prediction (Fire $F_1 = 0$), so the $34.43$ figure should be treated as provisional pending re-verification.}
+    \caption{Random-split sensitivity diagnostic. Re-partitioning the data at random into removes the separation between train and test. The classical U-Net gains $+3.98$ Fire $F_1$, and the classical FPN gains $+8.75$ from this change alone. $^{\dagger}$The quantum FPN uses a small quantum channel-attention gate at the bottleneck (squeeze-excite style), architecturally distinct from the QuFeX/QB-Net inserts described in Sections~\ref{sec:qufex} and~\ref{sec:qbnet}. $^{\ddagger}$This value could not be reproduced from recovered training artifacts: the only recovered quantum-FPN run for this configuration collapses to a degenerate all-background prediction (Fire $F_1 = 0$), so the $34.43$ figure should be treated as provisional pending re-verification.}
     \label{tab:random-split}
 \end{table}
 
