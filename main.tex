@@ -273,6 +273,13 @@ Within QuFeX, the 8-qubit, 1-layer configuration outperforms 4-qubit, 2-layer ($
 
 The cross-architecture comparison complicates any simple ``more qubits is better'' reading. QB-Net at 4 qubits and 2 layers ($F_1 = 31.18$) exceeds QuFeX at 8 qubits and 1 layer ($F_1 = 30.79$), so the ansatz design choice appears to matter more than qubit count alone. QB-Net~\cite{qbnet} applies a symmetric $U_3$ rotation on every qubit followed by a CNOT ladder, while QuFeX~\cite{qufex} splits the qubits into two halves with $U_1$ ($R_X + R_Z$) and $U_2$ ($R_X + R_Y$) blocks entangled by a CZ ring. At matched $(n, L)$, QB-Net also carries roughly $50\%$ more trainable bottleneck parameters than QuFeX (three per qubit per layer compared to two), which may further contribute to the gap. Disentangling ansatz design from raw parameter count would require an explicit ablation we have not yet run.
 
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{media/fig_model_comparison.png}
+    \caption{Qualitative comparison on the held-out test scene (Scene~4), reconstructed from its overlapping $512\times512$ patches. From left: input RGB composite, ground-truth fire mask, and binary detections (threshold 0.5) for the classical baseline, QuFeX (8q/1L), and QB-Net (4q/2L). The operating-point shift discussed above is visible: QuFeX recovers more fire pixels than the conservative classical baseline (higher recall, with some spurious detections), while QB-Net produces the cleanest map, most closely tracking the ground truth.}
+    \label{fig:model-comparison}
+\end{figure}
+
 \subsection{Loss Function Ablation}
 \label{sec:lossablation}
 
@@ -352,6 +359,13 @@ To move beyond binary per-patch evaluation, we extended inference to output cont
     \end{subfigure}
     \caption{Scene 1 fire probability map (left) and binary detection vs.\ ground truth label at 0.5 threshold (right). Red regions in the probability map indicate high model confidence (P(fire) $\approx$ 1.0); the detection/label comparison shows the effect of applying the decision boundary.}
     \label{fig:probmap}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{media/fig_qbnet_probmap.png}
+    \caption{QB-Net probability map (left), thresholded binary detection at 0.5 (center), and ground truth label (right) for Scene~4. The probability map shows that fire-positive regions cluster near P(fire) $= 1.0$, while boundary regions exhibit intermediate confidence that a tuned threshold could resolve more cleanly.}
+    \label{fig:qbnet-probmap}
 \end{figure}
 
 \subsection{Train/Test Domain Shift}
@@ -511,6 +525,13 @@ Given the $2.5\%$ training fire-pixel rate, we tested a sampler-level rebalancin
     \includegraphics[width=0.85\textwidth]{media/paper/fig8_sampler_failure.png}
     \caption{Effect of adding a fire-aware \texttt{WeightedRandomSampler} (35\% fire-patch target) on top of weighted cross-entropy ($w=10$). Precision collapses by 29~pp, recall surges by 34~pp, and Fire $F_1$ falls by 13~pp relative to the baseline (Table~\ref{tab:sampler-fail}).}
     \label{fig:sampler-failure}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{media/fig_sampler_map.png}
+    \caption{Scene~4 prediction map under the fire-aware sampler (right) compared to the input image (left) and ground truth (center). The sampler causes the model to predict fire across nearly the entire scene, visually illustrating the precision collapse reported in Table~\ref{tab:sampler-fail}.}
+    \label{fig:sampler-map}
 \end{figure}
 
 % ---------------------------------------------------------------------
