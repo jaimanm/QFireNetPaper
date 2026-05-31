@@ -136,6 +136,13 @@ We train and evaluate \projectname{} on the Sen2Fire benchmark~\cite{sen2fire}, 
 \section{Methodology}
 % =====================================================================
 
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{media/v2_fig/combined_unet_quantum.png}
+    \caption{Overview of the hybrid quantum-classical architecture. The base model is a standard U-Net where the central double-convolution bottleneck is removed. It can be replaced by either the QuFeX module (top right) or the QB-Net module (bottom right). Both modules encode the heavily-compressed spatial features into quantum states, process them through variational layers, and return expectation values that are upsampled by the classical decoder.}
+    \label{fig:combined-arch}
+\end{figure}
+
 \subsection{Classical U-Net Architecture and Optimization}
 \label{sec:compactunet}
 
@@ -159,13 +166,6 @@ The basis of our automated detection system is a U-Net architecture designed to 
 
 \subsection{QuFeX Architecture}
 \label{sec:qufex}
-
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=\textwidth]{media/v2_fig/combined_unet_quantum.png}
-    \caption{Overview of the hybrid quantum-classical architecture. The base model is a standard U-Net where the central double-convolution bottleneck is removed. It can be replaced by either the QuFeX module (top right) or the QB-Net module (bottom right). Both modules encode the heavily-compressed spatial features into quantum states, process them through variational layers, and return expectation values that are upsampled by the classical decoder.}
-    \label{fig:combined-arch}
-\end{figure}
 
 \paragraph{Introduction.} Qu-Net~\cite{qufex} is a hybrid quantum-classical image segmentation model that preserves the U-Net encoder/decoder while replacing the central double-convolution bottleneck with a quantum feature-extraction module called \emph{QuFeX} (Figure~\ref{fig:combined-arch}). Placing the circuit at the bottleneck is targeted: spatial resolution is lowest there ($32\times32$ for a $512\times512$ input) while the channel depth is highest. At this depth, the classical encoder has aggregated spatial context from both neighboring pixels and the entire patch. This allows the quantum circuit to operate on dense, high-level features before the decoder reconstructs the final per-pixel predictions.
 
