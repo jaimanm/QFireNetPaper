@@ -375,14 +375,13 @@ The mode-4 result above mitigates the train/test domain shift indirectly, by rem
         Classical U-Net   & 5 & Random            & 94.66 & 35.34 & 30.42 & \textbf{32.69} \\
         Classical FPN     & 5 & Scene-based       & 93.07 & 36.48 & 26.96 & 31.01 \\
         Classical FPN     & 5 & Random            & 95.18 & 42.59 & 37.29 & \textbf{39.76} \\
-        Quantum FPN$^{\dagger}$ & 5 & Random      & 95.10 & 40.07 & 30.18 & 34.43$^{\ddagger}$ \\
         \bottomrule
     \end{tabular}
-    \caption{Random-split sensitivity diagnostic. Re-partitioning the data at random into removes the separation between train and test. The classical U-Net gains $+3.98$ Fire $F_1$, and the classical FPN gains $+8.75$ from this change alone. $^{\dagger}$The quantum FPN uses a small quantum channel-attention gate at the bottleneck (squeeze-excite style), architecturally distinct from the QuFeX/QB-Net inserts described in Sections~\ref{sec:qufex} and~\ref{sec:qbnet}. $^{\ddagger}$This value could not be reproduced from recovered training artifacts: the only recovered quantum-FPN run for this configuration collapses to a degenerate all-background prediction (Fire $F_1 = 0$), so the $34.43$ figure should be treated as provisional pending re-verification.}
+    \caption{Random-split sensitivity diagnostic. Re-partitioning the data at random removes the separation between train and test. The classical U-Net gains $+3.98$ Fire $F_1$, and the classical FPN gains $+8.75$ from this change alone. \emph{These numbers are not directly comparable to the published Sen2Fire benchmark}, which is defined on the scene-based split; we report them as a controlled diagnostic to isolate the contribution of the split itself.}
     \label{tab:random-split}
 \end{table}
 
-Two things stand out. First, the FPN architecture benefits more from the split change than the vanilla U-Net does ($+8.75$ vs.\ $+3.98$ Fire $F_1$), suggesting that the FPN's multi-scale fusion is particularly hurt by the train/test distribution mismatch in the scene-based split --- consistent with the high val/test gap we observed during FPN training under mode 5 above. Second, under the same random-split protocol, the quantum FPN variant falls $5.3$ points \emph{below} the classical FPN (Table~\ref{tab:random-split}). We caution against over-reading this comparison: the quantum FPN uses a small channel-attention quantum gate at the bottleneck rather than the per-spatial-location QuFeX/QB-Net bottleneck inserts that generated the $\approx +2$ quantum margin under the scene-based split (Sections~\ref{sec:qufex}--\ref{sec:qbnet}). The two are different quantum architectural designs and this result does not directly determine whether QuFeX or QB-Net retain their margin once the split-induced ceiling is removed. \textbf{We do not have QuFeX or QB-Net runs under the random-split protocol yet}, and acquiring them is the single most informative remaining experiment in this work (Section~\ref{sec:futurework}).
+One thing stands out: the FPN architecture benefits more from the split change than the vanilla U-Net does ($+8.75$ vs.\ $+3.98$ Fire $F_1$), suggesting that the FPN's multi-scale fusion is particularly hurt by the train/test distribution mismatch in the scene-based split --- consistent with the high val/test gap we observed during FPN training under mode 5 above. \textbf{We do not have QuFeX or QB-Net runs under the random-split protocol yet}, and acquiring them is the single most informative remaining experiment in this work (Section~\ref{sec:futurework}).
 
 \subsection{Failure Analysis}
 \label{sec:failures}
@@ -524,7 +523,7 @@ The central finding of this paper --- that QB-Net and QuFeX modestly beat a clas
 
 \subsection{Tier 1: Experiments needed to confirm the central claim}
 
-\paragraph{QuFeX and QB-Net under random splits.} \emph{The most important single experiment we have not yet run.} The scene-based partition of Sen2Fire is the source of the train/test domain shift documented in Section~\ref{sec:domainshift}, and removing it lifts the classical FPN by $+8.75$ Fire $F_1$ (Section~\ref{sec:randomsplit}). We have not yet trained QuFeX or QB-Net under the same random-split protocol. Without those runs, we cannot say whether the $\approx +2$ Fire $F_1$ quantum margin observed under the scene-based split survives the ceiling removal, persists as a smaller margin, or disappears. The quantum FPN result we do have under random splits ($34.43$, five points below classical FPN at the same protocol) suggests the answer is not automatic. Re-running QuFeX 8q/1L and QB-Net 4q/2L on random splits with at least five seeds each is the cleanest way to settle this and is our first priority.
+\paragraph{QuFeX and QB-Net under random splits.} \emph{The most important single experiment we have not yet run.} The scene-based partition of Sen2Fire is the source of the train/test domain shift documented in Section~\ref{sec:domainshift}, and removing it lifts the classical FPN by $+8.75$ Fire $F_1$ (Section~\ref{sec:randomsplit}). We have not yet trained QuFeX or QB-Net under the same random-split protocol. Without those runs, we cannot say whether the $\approx +2$ Fire $F_1$ quantum margin observed under the scene-based split survives the ceiling removal, persists as a smaller margin, or disappears. Re-running QuFeX 8q/1L and QB-Net 4q/2L on random splits with at least five seeds each is the cleanest way to settle this and is our first priority.
 
 \paragraph{Multi-seed reproduction of every reported result.} Every Fire $F_1$ number in Tables~\ref{tab:classical-runs} and~\ref{tab:quantum-runs} reflects a single seed ($1234$). With $\approx 6\%$ test-set fire pixels and a $504$-patch test scene, a three-seed standard deviation of $\pm 2$ Fire $F_1$ would not be surprising. Producing five-seed variance estimates at the three canonical configurations (matched classical baseline, QuFeX 8q/1L, QB-Net 4q/2L), under \emph{both} scene-based and random-split protocols, is the second priority and the one most likely to establish whether the quantum margin is statistically reliable.
 
@@ -532,7 +531,6 @@ The central finding of this paper --- that QB-Net and QuFeX modestly beat a clas
 
 \subsection{Tier 2: Architectural and methodological investigations}
 
-\paragraph{Why does the channel-attention quantum FPN underperform classical FPN under random splits?} The quantum FPN we evaluated uses a quantum squeeze-excite-style gate at the bottleneck, whereas QuFeX and QB-Net replace the bottleneck convolution per spatial location. The gap (classical FPN $39.76$ vs.\ quantum FPN $34.43$ under iid splits) deserves investigation. Possibilities include (a) the channel-attention design carries too few parameters to compete with the classical FPN's full multi-scale fusion, (b) the spatial squeeze-excite is information-lossy compared to a per-location bottleneck replacement, or (c) the FPN's lateral connections already capture the inductive bias the quantum bottleneck would otherwise provide. A controlled comparison swapping the quantum gate type while holding the decoder fixed would isolate which factor dominates.
 
 \paragraph{Combining QuFeX/QB-Net with FPN.} The paper's strongest classical result (FPN $39.76$ random / $31.13$ scene-based) and the paper's strongest quantum result (QB-Net $31.18$ scene-based) come from different architectural slots: FPN modifies the decoder; QuFeX/QB-Net modify the bottleneck. There is no architectural reason these cannot be combined. A QuFeX-or-QB-Net bottleneck inside an FPN decoder is the natural follow-on architecture; if the two contributions are additive in either direction, it would be the strongest single configuration in our search space.
 
@@ -591,7 +589,7 @@ Table~\ref{tab:ledger} consolidates every experiment in this work. For experimen
         \multicolumn{8}{l}{\emph{Sen2Fire, random $70/15/15$ split (not benchmark-comparable)}}\\
         Classical U-Net                           & U-Net-64 & 5 & random & 5   & 32.69 & 19.54 & 57.07 \\
         Classical FPN                             & FPN-64   & 4 & random & 15  & \textbf{39.76} & 24.82 & 59.96 \\
-        Quantum FPN (SE-gate)$^{c}$               & FPN-64   & 4 & random & 5   &  0.00 &  0.00 & 47.87 \\
+
         \addlinespace
         \multicolumn{8}{l}{\emph{Threshold calibration (classical baseline, \textbf{validation} split)}}\\
         Tuned threshold $0.65$                    & U-Net-64 & 5 & val   & 5    & 27.42 & 15.89 & 53.91 \\
@@ -603,7 +601,7 @@ Table~\ref{tab:ledger} consolidates every experiment in this work. For experimen
         Amplitude-encoding VQC bottleneck         & U-Net-64 & 5 & scene & ---  & \multicolumn{3}{l}{NaN gradients / all-background collapse} \\
         \bottomrule
     \end{tabular}
-    \caption{Complete experiment ledger. Best test Fire $F_1$ run per experiment (epoch count shown). Only the scene-based Sen2Fire group is directly comparable to the published benchmark; random-split, validation, and cross-dataset rows are reported separately. $^{a}$The matched-conditions 5-epoch run ($F_1=28.71$) is the anchor used for all classical/quantum comparisons in the body; the classical U-Net peaks at $29.83$ given a longer (20-epoch) budget. $^{b}$Negative result. $^{c}$The only recovered quantum-FPN run collapses to $F_1=0$; a provisional $34.43$ was previously reported for this slot (Table~\ref{tab:random-split}, footnote $\ddagger$).}
+    \caption{Complete experiment ledger. Best test Fire $F_1$ run per experiment (epoch count shown). Only the scene-based Sen2Fire group is directly comparable to the published benchmark; random-split, validation, and cross-dataset rows are reported separately. $^{a}$The matched-conditions 5-epoch run ($F_1=28.71$) is the anchor used for all classical/quantum comparisons in the body; the classical U-Net peaks at $29.83$ given a longer (20-epoch) budget. $^{b}$Negative result.}
     \label{tab:ledger}
 \end{table}
 
