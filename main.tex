@@ -181,7 +181,7 @@ Each step is followed by BatchNorm and ReLU. The resulting tensor $\mathbb{R}^{B
 
 \paragraph{Configurations evaluated.} We trained two QuFeX configurations as primary candidates: an 8-qubit, 1-layer setup (wider and shallower) and a 4-qubit, 2-layer setup (narrower and deeper, preferred by the original ansatz ablation in~\cite{qufex}). On Sen2Fire and at matched training conditions, the 8-qubit, 1-layer configuration consistently outperformed 4-qubit, 2-layer at 25 epochs (Fire $F_1$ $30.79$ vs.\ $27.43$). A previously reported 8-qubit, 2-layer run reached only Fire $F_1 = 18.29$ but completed just five epochs before its allocated walltime; this incomplete run, along with the previous two setups, are reported in Table~\ref{tab:quantum-runs}. We take 8 qubits, 1 layer, 25 epochs as the canonical QuFeX configuration for the comparisons in Section~\ref{sec:results}.
 
-\subsection{QB-Net Architecture and Optimization}
+\subsection{QB-Net Architecture}
 \label{sec:qbnet}
 
 \paragraph{Introduction.} We further investigated a second quantum bottleneck: QB-Net~\cite{qbnet}, proposed in the HiQC paper by Xu, Zhao \& Li (2025) in \textit{Quantum Machine Intelligence}. QB-Net targets the same architectural slot as QuFeX --- the deepest U-Net bottleneck --- and uses the same hybrid wrapper described in Section~\ref{sec:qufex} (staged $3{\times}3 \to 1{\times}1 \to 1{\times}1$ channel compression, per-spatial-location processing, $\pi\tanh(\cdot)$ normalization, symmetric expansion, residual bypass). The two designs differ \emph{only in the quantum circuit itself}, which lets us directly attribute any performance difference to ansatz choice.
@@ -191,7 +191,14 @@ Each step is followed by BatchNorm and ReLU. The resulting tensor $\mathbb{R}^{B
 \subsection{Classical FPN Extension}
 \label{sec:fpn-method}
 
-To establish whether the quantum gain over the classical baseline is matched by a sufficiently expressive \emph{classical} architectural change, we also evaluate a Feature Pyramid Network~\cite{fpn} variant of the U-Net. The FPN-U-Net retains the same full-width (base-64) encoder used by the quantum variants but replaces the U-Net's symmetric upsampling decoder with a top-down pyramid. At every encoder stage, a $1\times1$ lateral convolution unifies channel widths to a shared FPN width (256), the top-down feature is bilinearly upsampled and added to the lateral, and a $3\times3$ smoothing convolution removes aliasing. Pyramid levels $P_1$--$P_5$ are then resampled to the highest resolution and summed before a $1\times1$ output convolution. A 2D dropout layer ($p=0.5$) at the bottleneck regularizes the deepest features, and training combines weighted cross-entropy with MixUp~\cite{mixup} and CutMix~\cite{cutmix} sample mixing. 
+To establish whether the quantum gain over the classical baseline is matched by a sufficiently expressive \emph{classical} architectural change, we also evaluate a Feature Pyramid Network~(FPN)~\cite{fpn} variant. This FPN-U-Net retains the same full-width (base-64) encoder used by the quantum models, but replaces the symmetric U-Net decoder with a top-down semantic pyramid. The decoder is constructed in four steps:
+\begin{enumerate}[leftmargin=2em,topsep=2pt,itemsep=0pt]
+    \item \textbf{Lateral connections}: At each encoder stage, a $1\times1$ convolution unifies the varying channel depths to a shared FPN width of 256.
+    \item \textbf{Top-down pathway}: Features from higher pyramid levels are bilinearly upsampled and added element-wise to the corresponding lateral features.
+    \item \textbf{Smoothing}: A $3\times3$ convolution is applied to the merged features to mitigate upsampling aliasing, producing pyramid levels $P_1$ through $P_5$.
+    \item \textbf{Aggregation}: All five pyramid levels are upsampled to the original $512\times512$ image resolution and summed together before a final $1\times1$ classification convolution.
+\end{enumerate}
+Finally, a 2D dropout layer ($p=0.5$) at the bottleneck regularizes the deepest features, and training is augmented using a combination of weighted cross-entropy, MixUp~\cite{mixup}, and CutMix~\cite{cutmix}. 
 
 Additionally, we evaluate this variant in the SWIR-only spectral mode (\emph{mode 4}, three input channels, no aerosol) to test the hypothesis from Section~\ref{sec:domainshift} that dropping the most domain-shifted channel improves test-time generalization. The result of this combination is reported in Section~\ref{sec:fpn-extended}.
 
